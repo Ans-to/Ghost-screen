@@ -87,6 +87,10 @@ class GhostService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startAsForeground(
+            intent?.getStringExtra(EXTRA_LABEL) ?: "GhostDisplay",
+            intent?.getStringExtra(EXTRA_SESSION_ID),
+        )
         when (intent?.action) {
             ACTION_START -> scope.launch { handleStart(intent) }
             ACTION_RESURRECT -> scope.launch { handleResurrect() }
@@ -484,22 +488,31 @@ class GhostService : Service() {
     private fun startAsForeground(label: String, sessionId: String?) {
         val notification = GhostNotifications.sessionNotification(this, label, sessionId)
         val hasMp = MediaProjectionHolder.hasConsent()
-        if (Build.VERSION.SDK_INT >= 34) {
-            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            if (hasMp) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            startForeground(GhostNotifications.ID_FOREGROUND, notification, type)
-        } else if (Build.VERSION.SDK_INT >= 29) {
-            if (hasMp) {
-                startForeground(
-                    GhostNotifications.ID_FOREGROUND,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
-                )
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                if (hasMp) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                startForeground(GhostNotifications.ID_FOREGROUND, notification, type)
+            } else if (Build.VERSION.SDK_INT >= 29) {
+                if (hasMp) {
+                    startForeground(
+                        GhostNotifications.ID_FOREGROUND,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+                    )
+                } else {
+                    startForeground(GhostNotifications.ID_FOREGROUND, notification)
+                }
             } else {
                 startForeground(GhostNotifications.ID_FOREGROUND, notification)
             }
-        } else {
-            startForeground(GhostNotifications.ID_FOREGROUND, notification)
+        } catch (t: Throwable) {
+            Log.e(TAG, "startForeground failed, retrying without type", t)
+            try {
+                startForeground(GhostNotifications.ID_FOREGROUND, notification)
+            } catch (t2: Throwable) {
+                Log.e(TAG, "startForeground retry failed", t2)
+            }
         }
     }
 
@@ -708,12 +721,12 @@ class GhostService : Service() {
                 putExtra(EXTRA_FINANCE_CONFIRMED, financeConfirmed)
                 if (tier != null) putExtra(EXTRA_TIER, tier)
             }
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
         }
 
         fun stopAll(context: Context) {
             val intent = Intent(context, GhostService::class.java).setAction(ACTION_STOP_ALL)
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
         }
 
         fun startBrowser(
@@ -725,12 +738,25 @@ class GhostService : Service() {
                 MediaProjectionHolder.store(projectionResultCode, projectionData)
             }
             val intent = Intent(context, GhostService::class.java).setAction(ACTION_START_BROWSER)
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
         }
 
         fun stopBrowser(context: Context) {
             val intent = Intent(context, GhostService::class.java).setAction(ACTION_STOP_BROWSER)
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
+        }
+
+        private fun startForegroundOrService(context: Context, intent: Intent) {
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (t: Throwable) {
+                Log.e(TAG, "startForegroundService failed, falling back to startService", t)
+                try {
+                    context.startService(intent)
+                } catch (t2: Throwable) {
+                    Log.e(TAG, "startService failed", t2)
+                }
+            }
         }
     }
 }

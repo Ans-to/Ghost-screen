@@ -90,6 +90,7 @@ private fun MainShell(vm: GhostViewModel) {
     }
 
     LaunchGate(vm) { gate ->
+        Box(Modifier.fillMaxSize()) {
         when (dest) {
             Dest.Sessions -> Scaffold(
                 topBar = {
@@ -172,6 +173,7 @@ private fun MainShell(vm: GhostViewModel) {
                 onOpenViewer = gate.openViewer,
                 onSettings = { settingsPkg = it.packageName },
             )
+        }
         }
     }
 }

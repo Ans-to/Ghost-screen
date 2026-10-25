@@ -26,6 +26,7 @@ import com.ghostdisplay.app.launch.HiddenLaunch
 import com.ghostdisplay.app.profile.AppCategory
 import com.ghostdisplay.app.profile.AppCategoryClassifier
 import com.ghostdisplay.app.service.MediaProjectionHolder
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 private data class PendingStart(
@@ -52,9 +53,11 @@ fun LaunchGate(
     val sessions by vm.sessions.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val ghostApp = context.applicationContext as GhostApp
-    val financeOn by ghostApp.container.prefs.financeWarn.collectAsState(initial = true)
-    val explainerSeen by ghostApp.container.prefs.sessionExplainerSeen.collectAsState(initial = false)
+    val ghostApp = context.applicationContext as? GhostApp
+    val financeFlow = remember(ghostApp) { ghostApp?.container?.prefs?.financeWarn ?: flowOf(true) }
+    val explainerFlow = remember(ghostApp) { ghostApp?.container?.prefs?.sessionExplainerSeen ?: flowOf(false) }
+    val financeOn by financeFlow.collectAsState(initial = true)
+    val explainerSeen by explainerFlow.collectAsState(initial = false)
 
     var pendingLaunch by remember { mutableStateOf<PendingStart?>(null) }
     var pendingExisting by remember { mutableStateOf<Pair<LaunchableApp, GhostSession>?>(null) }
@@ -106,7 +109,16 @@ fun LaunchGate(
         if (HiddenLaunch.needsMediaProjection(profile) && !MediaProjectionHolder.hasConsent()) {
             pendingLaunch = PendingStart(app, profile, additional, financeConfirmed)
             val mgr = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mpLauncher.launch(mgr.createScreenCaptureIntent())
+            try {
+                mpLauncher.launch(mgr.createScreenCaptureIntent())
+            } catch (t: Throwable) {
+                pendingLaunch = null
+                Toast.makeText(
+                    context,
+                    "Could not open screen-capture consent: ${t.message}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
         } else {
             HiddenLaunch.start(
                 context,
@@ -215,7 +227,7 @@ fun LaunchGate(
                 TextButton(onClick = {
                     showExplainer = false
                     explainerDone = true
-                    scope.launch { ghostApp.container.prefs.setSessionExplainerSeen(true) }
+                    scope.launch { ghostApp?.container?.prefs?.setSessionExplainerSeen(true) }
                     if (pair != null) requestLaunch(pair.first, pair.second)
                 }) { Text("Got it") }
             },

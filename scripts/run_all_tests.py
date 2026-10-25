@@ -646,8 +646,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.0"', gradle)
-        self.assertIn("versionCode = 3", gradle)
+        self.assertIn('versionName = "1.3.1"', gradle)
+        self.assertIn("versionCode = 4", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,8 +673,64 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.0-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.0", wf)
+        self.assertIn("GhostDisplay-1.3.1-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.1", wf)
+
+    def test_hold_chooser_is_not_modal_bottom_sheet(self):
+        sheet = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "AppActionSheet.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertNotIn("ModalBottomSheet(", sheet)
+        self.assertNotIn("rememberModalBottomSheetState", sheet)
+        hold = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "HoldActionActivity.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertNotIn("enableEdgeToEdge", hold)
+        self.assertNotIn("onboardingComplete", hold)
+
+    def test_service_promotes_foreground_immediately(self):
+        svc = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "service",
+                "GhostService.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        on_start = svc.split("fun onStartCommand(")[1].split("return START_STICKY")[0]
+        self.assertIn("startAsForeground(", on_start)
+        self.assertLess(on_start.find("startAsForeground("), on_start.find("when (intent?.action)"))
 
 
 class UserFlowScenarioTests(unittest.TestCase):

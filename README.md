@@ -1,6 +1,6 @@
 # GhostDisplay
 
-GhostDisplay **1.3.0** — a standalone native Android app that runs **your real Chrome** (or Firefox, or any installed browser) on a hidden `VirtualDisplay`. Same app, same tabs, same account. Open **at least 10 tabs** in the Viewer; the display stays live with a wake lock so the browser is not backgrounded the way it is when you leave it for the home screen.
+GhostDisplay **1.3.1** — a standalone native Android app that runs **your real Chrome** (or Firefox, or any installed browser) on a hidden `VirtualDisplay`. Same app, same tabs, same account. Open **at least 10 tabs** in the Viewer; the display stays live with a wake lock so the browser is not backgrounded the way it is when you leave it for the home screen.
 
 It can also launch any other installed app the same way (no floating window, split-screen, PiP, or mirroring). There is no in-app WebView “replacement browser” in the main UI.
 
@@ -20,7 +20,7 @@ GhostDisplay does **not** record or exfiltrate frames. The optional debug previe
 
 There is no APK attached to this chat. After GitHub Actions finishes a build, download it here:
 
-1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.3.0-debug.apk`
+1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.3.1-debug.apk`
 2. **Actions artifact** (every PR / push): [github.com/Ans-to/Ghost-screen/actions](https://github.com/Ans-to/Ghost-screen/actions) → latest **Build APK** run → Artifacts → **GhostDisplay-apk** (zip; unzip the APK)
 
 Install on an Android 10+ phone: allow unknown sources / “Install unknown apps” for your browser or Files, then open the APK. Debug id is `com.ghostdisplay.app.debug`.

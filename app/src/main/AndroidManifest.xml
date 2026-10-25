@@ -104,6 +104,7 @@
             android:taskAffinity=""
             android:theme="@style/Theme.GhostDisplay.Hold"
             android:label="@string/hold_action_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustNothing" />
 
         <service

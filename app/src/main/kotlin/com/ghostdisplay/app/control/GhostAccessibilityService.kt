@@ -70,13 +70,21 @@ class GhostAccessibilityService : AccessibilityService() {
     private fun handleHomeHold(event: AccessibilityEvent) {
         val now = SystemClock.uptimeMillis()
         if (now - lastHoldAt < 800) return
-        val candidate = candidateOf(event) ?: return
-        val hit = LauncherHoldResolver.resolve(
-            candidate,
-            launchableCached(),
-            homePackagesCached(),
-            packageName,
-        ) ?: return
+        val candidate = try {
+            candidateOf(event)
+        } catch (_: Throwable) {
+            null
+        } ?: return
+        val hit = try {
+            LauncherHoldResolver.resolve(
+                candidate,
+                launchableCached(),
+                homePackagesCached(),
+                packageName,
+            )
+        } catch (_: Throwable) {
+            null
+        } ?: return
         lastHoldAt = now
         mainHandler.post {
             try {
@@ -88,7 +96,7 @@ class GhostAccessibilityService : AccessibilityService() {
                         hit.label,
                     ),
                 )
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 // If the OEM blocks background activities, in-app hold still works.
             }
         }
@@ -128,7 +136,11 @@ class GhostAccessibilityService : AccessibilityService() {
     private fun launchableCached(): List<LaunchableApp> {
         val now = SystemClock.uptimeMillis()
         if (now - cachedAppsAt < 15_000 && cachedApps.isNotEmpty()) return cachedApps
-        cachedApps = AppCatalog(packageManager).listLaunchable(packageName)
+        cachedApps = try {
+            AppCatalog(packageManager).listLaunchable(packageName)
+        } catch (_: Throwable) {
+            cachedApps
+        }
         cachedAppsAt = now
         return cachedApps
     }
