@@ -32,13 +32,17 @@ object VirtualDisplayFlags {
      * the physical display is a non-goal. OWN_CONTENT_ONLY is absent because it
      * would prevent launching *other* apps onto the display.
      *
-     * TRUSTED / SYSTEM_DECORATIONS almost always require privileged identity,
-     * so they are not in the default ladder (trying them first would just fail
-     * and confuse the user).
+     * TRUSTED is tried first and dropped when the device rejects it. A trusted
+     * display is the AOSP path that allows other packages to land on it.
      */
     fun attempts(secure: Boolean): List<FlagSet> {
         val extra = if (secure) SECURE else 0
         return listOf(
+            FlagSet(
+                "trusted+public+presentation+touch+own_focus+destroy",
+                TRUSTED or PUBLIC or PRESENTATION or SUPPORTS_TOUCH or OWN_FOCUS or
+                    DESTROY_CONTENT_ON_REMOVAL or extra,
+            ),
             FlagSet(
                 "public+presentation+touch+own_focus+destroy",
                 PUBLIC or PRESENTATION or SUPPORTS_TOUCH or OWN_FOCUS or

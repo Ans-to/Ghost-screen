@@ -230,8 +230,8 @@ class GhostService : Service() {
 
         val launchResult = launcher.launch(pkg, activity, handle.displayId)
 
-        // Trampoline starts the target after it lands on the VD.
-        delay(1_200)
+        // Handshake already waited for the target start; give a11y a beat to see it.
+        delay(400)
         val onVd = a11y.packageOnDisplay(handle.displayId, pkg)
         val onDefault = a11y.packageOnDefaultDisplay(pkg)
         val probe = a11y.probe(handle.displayId, pkg)

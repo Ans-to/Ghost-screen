@@ -282,11 +282,13 @@ class PerAppProfileTests(unittest.TestCase):
 PUBLIC, PRESENTATION, SECURE = 1 << 0, 1 << 1, 1 << 2
 AUTO_MIRROR, SUPPORTS_TOUCH, OWN_FOCUS = 1 << 4, 1 << 6, 1 << 11
 DESTROY = 1 << 8
+TRUSTED = 1 << 10
 
 
 def flag_attempts(secure=False):
     extra = SECURE if secure else 0
     return [
+        TRUSTED | PUBLIC | PRESENTATION | SUPPORTS_TOUCH | OWN_FOCUS | DESTROY | extra,
         PUBLIC | PRESENTATION | SUPPORTS_TOUCH | OWN_FOCUS | DESTROY | extra,
         PUBLIC | PRESENTATION | SUPPORTS_TOUCH | OWN_FOCUS | extra,
         PUBLIC | PRESENTATION | SUPPORTS_TOUCH | extra,
@@ -646,8 +648,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.4"', gradle)
-        self.assertIn("versionCode = 7", gradle)
+        self.assertIn('versionName = "1.3.5"', gradle)
+        self.assertIn("versionCode = 8", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,8 +675,8 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.4-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.4", wf)
+        self.assertIn("GhostDisplay-1.3.5-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.5", wf)
 
     def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
         launcher = open(
@@ -693,7 +695,12 @@ class SourceContractTests(unittest.TestCase):
             encoding="utf-8",
         ).read()
         self.assertIn("DisplayTrampolineActivity", launcher)
-        self.assertIn("startOwnActivityOnDisplay", launcher)
+        self.assertIn("TrampolineSession", launcher)
+        self.assertIn("HiddenTaskMover", launcher)
+        self.assertIn("host.startActivity(trampoline", launcher)
+        self.assertNotIn("startOwnActivityOnDisplay", launcher)
+        self.assertNotIn("createWindowContext", launcher)
+        self.assertNotIn("createDisplayContext", launcher)
         self.assertNotIn("com.android.chrome", launcher)
         trampoline = open(
             os.path.join(
@@ -713,6 +720,15 @@ class SourceContractTests(unittest.TestCase):
         self.assertNotIn("options.launchDisplayId", trampoline)
         self.assertNotIn("ActivityOptions", trampoline)
         self.assertNotIn("finishAndRemoveTask", trampoline)
+        self.assertIn("onMovedToDisplay", trampoline)
+        self.assertIn("Display.DEFAULT_DISPLAY", trampoline)
+        self.assertIn("startActivity(launch)", trampoline)
+        self.assertIn("startActivity(fallback)", trampoline)
+        self.assertIn("awaitFinished", launcher)
+        manifest = open(os.path.join(ROOT, "app", "src", "main", "AndroidManifest.xml"), encoding="utf-8").read()
+        trampoline_decl = manifest.split("DisplayTrampolineActivity")[1].split("<activity")[0]
+        self.assertNotIn("android:noHistory", trampoline_decl)
+        self.assertIn("singleInstance", trampoline_decl)
         engine = open(
             os.path.join(
                 ROOT,

@@ -100,11 +100,11 @@
             android:name=".launch.DisplayTrampolineActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.GhostDisplay.Hold"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.ghostdisplay.app.trampoline"
+            android:theme="@style/Theme.GhostDisplay.Trampoline"
             android:label="@string/hold_action_title"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:noHistory="true" />
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboardHidden|uiMode" />
 
         <activity
             android:name=".ui.HoldActionActivity"
