@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GhostDisplay</string>
+    <string name="accessibility_service_label">GhostDisplay control</string>
+    <string name="accessibility_service_description">GhostDisplay uses Accessibility to click, type, and scroll inside apps that are running on a hidden virtual display. It does not read your screen for ads or analytics. You can turn this off at any time in Settings → Accessibility.</string>
+    <string name="notification_listener_label">GhostDisplay notification filter</string>
+    <string name="remote_control_title">Remote Control</string>
+    <string name="debug_preview_title">Debug preview</string>
+    <string name="app_viewer_title">Hidden window</string>
+    <string name="viewer_title">Persistent Browser</string>
+    <string name="channel_session_name">Hidden sessions</string>
+    <string name="channel_session_desc">Persistent status while an app is running on the hidden display.</string>
+    <string name="channel_restore_name">Session restore</string>
+    <string name="notification_running">%1$s running hidden</string>
+    <string name="notification_stop">Stop</string>
+    <string name="notification_remote">Remote</string>
+</resources>
