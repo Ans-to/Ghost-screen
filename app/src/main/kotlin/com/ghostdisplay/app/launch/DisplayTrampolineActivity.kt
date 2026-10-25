@@ -1,19 +1,18 @@
 package com.ghostdisplay.app.launch
 
 import android.app.Activity
-import android.app.ActivityOptions
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.view.Display
 
 /**
- * GhostDisplay's own activity, started on the virtual display. From here the
- * target app is started as a child of a caller that already lives on that
- * display — which Android allows even when display-0 is forbidden from
- * placing a foreign task on a virtual display.
+ * GhostDisplay activity that is already on the virtual display.
  *
- * Never opened on the phone screen: if we landed on display 0, we abort.
+ * Xiaomi / HyperOS rejects startActivity of *another* package with
+ * launchDisplayId. It does allow our own activity on a display we own.
+ * Chrome is then started with no launchDisplayId so it inherits this
+ * activity's display.
  */
 class DisplayTrampolineActivity : Activity() {
 
@@ -33,15 +32,13 @@ class DisplayTrampolineActivity : Activity() {
                 Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
                 Intent.FLAG_ACTIVITY_NEW_DOCUMENT
         }
-        val options = ActivityOptions.makeBasic()
-        options.launchDisplayId = displayId
         try {
-            startActivity(launch, options.toBundle())
+            startActivity(launch)
         } catch (_: Throwable) {
             val fallback = packageManager.getLaunchIntentForPackage(pkg)
             if (fallback != null) {
                 fallback.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
-                startActivity(fallback, options.toBundle())
+                startActivity(fallback)
             }
         }
         finish()

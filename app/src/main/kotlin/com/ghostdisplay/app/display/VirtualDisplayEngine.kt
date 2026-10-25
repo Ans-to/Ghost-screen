@@ -84,19 +84,26 @@ class VirtualDisplayEngine(
         }
 
         val wantMp = config.surfaceMode == DisplayConfig.SurfaceMode.MEDIA_PROJECTION || config.secure
-        if (wantMp && mediaProjection == null) {
+        if (config.secure && mediaProjection == null) {
             surface.close()
             return CreateResult.Failed(
                 FailureReason.MEDIA_PROJECTION_REQUIRED,
-                "This app is configured for a MediaProjection-backed (or secure) display. " +
-                    "Grant the standard screen-capture prompt, then retry. " +
-                    "Nothing is recorded — the consent is only used to create a hidden virtual display.",
+                "A secure hidden display needs the standard screen-capture prompt. " +
+                    "Nothing is recorded — the consent is only used to create the display.",
                 emptyList(),
             )
         }
 
         val attempts = VirtualDisplayFlags.attempts(secure = config.secure)
         val attemptLog = mutableListOf<String>()
+
+        // App-owned DisplayManager displays report GhostDisplay as ownerUid.
+        // MediaProjection displays are often owned by system_server; Xiaomi then
+        // rejects startActivity(..., launchDisplayId) for every other package.
+        if (!config.secure) {
+            val dmResult = createViaDisplayManager(sessionId, config, surface, attempts, attemptLog)
+            if (dmResult != null) return dmResult
+        }
 
         if (wantMp && mediaProjection != null) {
             val result = createViaMediaProjection(
@@ -105,8 +112,10 @@ class VirtualDisplayEngine(
             if (result != null) return result
         }
 
-        val dmResult = createViaDisplayManager(sessionId, config, surface, attempts, attemptLog)
-        if (dmResult != null) return dmResult
+        if (config.secure) {
+            val dmResult = createViaDisplayManager(sessionId, config, surface, attempts, attemptLog)
+            if (dmResult != null) return dmResult
+        }
 
         surface.close()
         return CreateResult.Failed(

@@ -646,8 +646,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.3"', gradle)
-        self.assertIn("versionCode = 6", gradle)
+        self.assertIn('versionName = "1.3.4"', gradle)
+        self.assertIn("versionCode = 7", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,10 +673,10 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.3-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.3", wf)
+        self.assertIn("GhostDisplay-1.3.4-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.4", wf)
 
-    def test_hidden_launch_uses_display_context_and_trampoline(self):
+    def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
         launcher = open(
             os.path.join(
                 ROOT,
@@ -692,11 +692,9 @@ class SourceContractTests(unittest.TestCase):
             ),
             encoding="utf-8",
         ).read()
-        self.assertIn("createDisplayContext", launcher)
-        self.assertIn("createWindowContext", launcher)
         self.assertIn("DisplayTrampolineActivity", launcher)
-        self.assertNotIn("context.startActivity", launcher)
-        self.assertIn("LaunchResult.Failed(3, errors, false)", launcher)
+        self.assertIn("startOwnActivityOnDisplay", launcher)
+        self.assertNotIn("com.android.chrome", launcher)
         trampoline = open(
             os.path.join(
                 ROOT,
@@ -712,8 +710,26 @@ class SourceContractTests(unittest.TestCase):
             ),
             encoding="utf-8",
         ).read()
-        self.assertIn("DEFAULT_DISPLAY", trampoline)
+        self.assertNotIn("options.launchDisplayId", trampoline)
+        self.assertNotIn("ActivityOptions", trampoline)
         self.assertNotIn("finishAndRemoveTask", trampoline)
+        engine = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "display",
+                "VirtualDisplayEngine.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        create = engine.split("val attempts = VirtualDisplayFlags.attempts")[1].split("surface.close()")[0]
+        self.assertLess(create.find("createViaDisplayManager"), create.find("createViaMediaProjection"))
         audio = open(
             os.path.join(
                 ROOT,

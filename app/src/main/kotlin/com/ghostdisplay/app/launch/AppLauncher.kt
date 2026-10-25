@@ -3,7 +3,6 @@ package com.ghostdisplay.app.launch
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityOptions
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
@@ -15,17 +14,10 @@ import android.view.WindowManager
 /**
  * Places a target app on a virtual display.
  *
- * Starting a foreign app from GhostService is a Permission Denial (the
- * ProcessRecord error on Active sessions). Starting it from a display-0
- * activity with only setLaunchDisplayId is also blocked on several OEMs.
- *
- * Order:
- *  1. [Context.createDisplayContext] / [Context.createWindowContext] for the
- *     virtual display, then startActivity — the Context itself is bound to
- *     that display.
- *  2. Resumed activity + [ActivityOptions.setLaunchDisplayId].
- *  3. Our [DisplayTrampolineActivity] on the virtual display starts the
- *     target from a caller that already lives there.
+ * Xiaomi denies startActivity of a *foreign* package with launchDisplayId
+ * (the “with launchDisplayId: N” Permission Denial). We only ever send
+ * launchDisplayId for our own [DisplayTrampolineActivity]. That activity
+ * is already on the hidden display and starts the target with no display id.
  *
  * Never start the target on display 0.
  */
@@ -59,48 +51,34 @@ class AppLauncher(
             return LaunchResult.Failed(0, listOf(t.message ?: "No visible GhostDisplay screen."), false)
         }
         val display = displayOf(host, virtualDisplayId)
-            ?: return LaunchResult.Failed(
-                0,
-                listOf("Virtual display $virtualDisplayId is gone."),
-                false,
-            )
+            ?: return LaunchResult.Failed(0, listOf("Virtual display $virtualDisplayId is gone."), false)
 
-        val explicit = explicitIntent(packageName, activityName)
+        val trampoline = Intent(host, DisplayTrampolineActivity::class.java).apply {
+            putExtra(DisplayTrampolineActivity.EXTRA_PACKAGE, packageName)
+            putExtra(DisplayTrampolineActivity.EXTRA_ACTIVITY, activityName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
 
         val step1 = runCatching {
-            startFromDisplayContext(host, display, virtualDisplayId, explicit)
+            startOwnActivityOnDisplay(host, display, virtualDisplayId, trampoline)
             peekTaskId(packageName)
         }
         if (step1.isSuccess) {
-            return launched(1, virtualDisplayId, step1.getOrNull(), "display context")
+            return launched(1, virtualDisplayId, step1.getOrNull(), "trampoline via display context")
         }
-        errors += "Step 1 (display context): ${step1.exceptionOrNull()?.message}"
+        errors += "Step 1 (own activity on hidden display): ${step1.exceptionOrNull()?.message}"
 
         val step2 = runCatching {
-            startWithLaunchDisplayId(host, virtualDisplayId, explicit)
+            host.startActivity(trampoline, optionsFor(virtualDisplayId).toBundle())
             peekTaskId(packageName)
         }
         if (step2.isSuccess) {
-            return launched(2, virtualDisplayId, step2.getOrNull(), "setLaunchDisplayId")
+            return launched(2, virtualDisplayId, step2.getOrNull(), "trampoline via setLaunchDisplayId")
         }
-        errors += "Step 2 (setLaunchDisplayId): ${step2.exceptionOrNull()?.message}"
+        errors += "Step 2 (own activity setLaunchDisplayId): ${step2.exceptionOrNull()?.message}"
 
-        val step3 = runCatching {
-            val trampoline = Intent(host, DisplayTrampolineActivity::class.java).apply {
-                putExtra(DisplayTrampolineActivity.EXTRA_PACKAGE, packageName)
-                putExtra(DisplayTrampolineActivity.EXTRA_ACTIVITY, activityName)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            startFromDisplayContext(host, display, virtualDisplayId, trampoline)
-            peekTaskId(packageName)
-        }
-        if (step3.isSuccess) {
-            return launched(3, virtualDisplayId, step3.getOrNull(), "trampoline on hidden display")
-        }
-        errors += "Step 3 (trampoline): ${step3.exceptionOrNull()?.message}"
-
-        errors += "The hidden display exists, but this device will not place $packageName on it. The app was not opened on the phone screen."
-        return LaunchResult.Failed(3, errors, false)
+        errors += "The hidden display exists, but this device will not place GhostDisplay's own starter activity on it, so $packageName was not started. The app was not opened on the phone screen."
+        return LaunchResult.Failed(2, errors, false)
     }
 
     private fun launched(step: Int, displayId: Int, taskId: Int?, how: String) = LaunchResult.Launched(
@@ -115,7 +93,7 @@ class AppLauncher(
         return dm.getDisplay(displayId)
     }
 
-    private fun startFromDisplayContext(
+    private fun startOwnActivityOnDisplay(
         host: Activity,
         display: Display,
         displayId: Int,
@@ -141,16 +119,12 @@ class AppLauncher(
             }
         }
         try {
-            startWithLaunchDisplayId(host, displayId, intent)
+            host.startActivity(intent, bundle)
             return
         } catch (t: Throwable) {
             last = t
         }
-        throw last ?: IllegalStateException("No display-bound start path on API ${Build.VERSION.SDK_INT}")
-    }
-
-    private fun startWithLaunchDisplayId(host: Activity, displayId: Int, intent: Intent) {
-        host.startActivity(intent, optionsFor(displayId).toBundle())
+        throw last ?: IllegalStateException("Could not start GhostDisplay on display $displayId")
     }
 
     private fun optionsFor(displayId: Int): ActivityOptions {
@@ -197,16 +171,6 @@ class AppLauncher(
             Log.d(TAG, "getAppTasks failed: ${t.message}")
         }
         return null
-    }
-
-    private fun explicitIntent(packageName: String, activityName: String): Intent {
-        return Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-            component = ComponentName(packageName, activityName)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
-                Intent.FLAG_ACTIVITY_NEW_DOCUMENT
-        }
     }
 
     private fun applyCallerDisplayId(options: ActivityOptions, displayId: Int) {
