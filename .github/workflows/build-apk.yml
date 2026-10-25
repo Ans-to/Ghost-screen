@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   apk:
@@ -36,7 +37,23 @@ jobs:
         run: yes | sdkmanager --licenses || true
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee gradle-build.log
+
+      - name: Comment Gradle log on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path("gradle-build.log").read_text(errors="replace")
+          tail = text[-50000:]
+          body = "Gradle assembleDebug failed. Last log:\n\n```\n" + tail + "\n```\n"
+          Path("/tmp/pr-comment.md").write_text(body)
+          PY
+          gh pr comment ${{ github.event.pull_request.number || 2 }} --body-file /tmp/pr-comment.md
 
       - name: Stage APK
         run: |
