@@ -3,13 +3,17 @@ package com.ghostdisplay.app.ui
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -21,23 +25,20 @@ import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
 import com.ghostdisplay.app.data.GhostSession
 import com.ghostdisplay.app.data.LaunchableApp
 import com.ghostdisplay.app.launch.KnownLimits
@@ -51,7 +52,11 @@ data class AppActionTarget(
     val live: GhostSession?,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Hold chooser. A real in-window overlay — not a Material ModalBottomSheet
+ * (those crash on several OEM skins, including HyperOS) and not a
+ * draw-over-apps window.
+ */
 @Composable
 fun AppActionSheet(
     target: AppActionTarget,
@@ -61,19 +66,35 @@ fun AppActionSheet(
     onOpenViewer: (GhostSession) -> Unit,
     onSettings: ((LaunchableApp) -> Unit)? = null,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        AppActionBody(
-            target = target,
-            onDismiss = onDismiss,
-            onRunHidden = onRunHidden,
-            onStopHidden = onStopHidden,
-            onOpenViewer = onOpenViewer,
-            onSettings = onSettings,
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onDismiss,
+                ),
         )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+        ) {
+            AppActionBody(
+                target = target,
+                onDismiss = onDismiss,
+                onRunHidden = onRunHidden,
+                onStopHidden = onStopHidden,
+                onOpenViewer = onOpenViewer,
+                onSettings = onSettings,
+            )
+        }
     }
 }
 
@@ -88,7 +109,7 @@ fun AppActionBody(
 ) {
     val app = target.app
     val live = target.live
-    val bmp = remember(app.packageName) { target.icon?.toBitmap(128, 128) }
+    val bmp = remember(app.packageName, target.icon) { target.icon?.safeImageBitmap(128) }
     val limit = KnownLimits.forApp(app.packageName, app.label)
 
     Column(
@@ -102,7 +123,7 @@ fun AppActionBody(
             Box(Modifier.size(56.dp)) {
                 if (bmp != null) {
                     Image(
-                        bitmap = bmp.asImageBitmap(),
+                        bitmap = bmp,
                         contentDescription = null,
                         modifier = Modifier
                             .size(56.dp)

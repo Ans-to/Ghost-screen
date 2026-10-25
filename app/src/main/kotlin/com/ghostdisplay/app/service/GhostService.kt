@@ -87,6 +87,10 @@ class GhostService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startAsForeground(
+            intent?.getStringExtra(EXTRA_LABEL) ?: "GhostDisplay",
+            intent?.getStringExtra(EXTRA_SESSION_ID),
+        )
         when (intent?.action) {
             ACTION_START -> scope.launch { handleStart(intent) }
             ACTION_RESURRECT -> scope.launch { handleResurrect() }
@@ -226,19 +230,21 @@ class GhostService : Service() {
 
         val launchResult = launcher.launch(pkg, activity, handle.displayId)
 
-        // Give windows a moment to appear so Accessibility can verify placement.
-        delay(700)
+        // Trampoline starts the target after it lands on the VD.
+        delay(1_200)
         val onVd = a11y.packageOnDisplay(handle.displayId, pkg)
         val onDefault = a11y.packageOnDefaultDisplay(pkg)
         val probe = a11y.probe(handle.displayId, pkg)
 
         var audioOk = false
         var audioNotice: String? = null
-        if (config.audioEnabled) {
+        if (config.audioEnabled && launchResult is AppLauncher.LaunchResult.Launched) {
             val audioResult = audio.start(mp)
             audioOk = audioResult.started
             audioNotice = audioResult.notice
             if (audioOk) audioBoundSession = sessionId
+        } else if (config.audioEnabled) {
+            audioNotice = "Audio routing was not started because the app did not launch on the hidden display."
         }
 
         val flagsRequested = VirtualDisplayFlags.attempts(config.secure).first().name
@@ -261,8 +267,8 @@ class GhostService : Service() {
                 audioRequested = config.audioEnabled,
                 secureRequested = config.secure,
                 knownLimit = CompatibilityProbe.caveatFor(category),
-                extraNotices = listOfNotNull(audioNotice) + probe.notices +
-                    (if (launchResult is AppLauncher.LaunchResult.Failed) launchResult.errors else emptyList()),
+                extraNotices = (if (launchResult is AppLauncher.LaunchResult.Failed) launchResult.errors else emptyList()) +
+                    probe.notices + listOfNotNull(audioNotice),
             ),
         )
         val after = CompatibilityProbe.afterLaunch(
@@ -484,22 +490,31 @@ class GhostService : Service() {
     private fun startAsForeground(label: String, sessionId: String?) {
         val notification = GhostNotifications.sessionNotification(this, label, sessionId)
         val hasMp = MediaProjectionHolder.hasConsent()
-        if (Build.VERSION.SDK_INT >= 34) {
-            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            if (hasMp) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            startForeground(GhostNotifications.ID_FOREGROUND, notification, type)
-        } else if (Build.VERSION.SDK_INT >= 29) {
-            if (hasMp) {
-                startForeground(
-                    GhostNotifications.ID_FOREGROUND,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
-                )
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                if (hasMp) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                startForeground(GhostNotifications.ID_FOREGROUND, notification, type)
+            } else if (Build.VERSION.SDK_INT >= 29) {
+                if (hasMp) {
+                    startForeground(
+                        GhostNotifications.ID_FOREGROUND,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+                    )
+                } else {
+                    startForeground(GhostNotifications.ID_FOREGROUND, notification)
+                }
             } else {
                 startForeground(GhostNotifications.ID_FOREGROUND, notification)
             }
-        } else {
-            startForeground(GhostNotifications.ID_FOREGROUND, notification)
+        } catch (t: Throwable) {
+            Log.e(TAG, "startForeground failed, retrying without type", t)
+            try {
+                startForeground(GhostNotifications.ID_FOREGROUND, notification)
+            } catch (t2: Throwable) {
+                Log.e(TAG, "startForeground retry failed", t2)
+            }
         }
     }
 
@@ -535,7 +550,10 @@ class GhostService : Service() {
         db.profiles().upsert(
             existing.copy(
                 compatibility = report.compatibility.name,
-                lastError = report.notices.firstOrNull(),
+                lastError = report.notices.firstOrNull { notice ->
+                    notice.contains("Step ") || notice.contains("Permission Denial") ||
+                        notice.contains("will not place") || notice.contains("blocked")
+                } ?: report.notices.firstOrNull { !it.contains("Audio") },
                 lastNoticesJson = gson.toJson(report.notices),
                 updatedAt = System.currentTimeMillis(),
             ),
@@ -708,12 +726,12 @@ class GhostService : Service() {
                 putExtra(EXTRA_FINANCE_CONFIRMED, financeConfirmed)
                 if (tier != null) putExtra(EXTRA_TIER, tier)
             }
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
         }
 
         fun stopAll(context: Context) {
             val intent = Intent(context, GhostService::class.java).setAction(ACTION_STOP_ALL)
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
         }
 
         fun startBrowser(
@@ -725,12 +743,25 @@ class GhostService : Service() {
                 MediaProjectionHolder.store(projectionResultCode, projectionData)
             }
             val intent = Intent(context, GhostService::class.java).setAction(ACTION_START_BROWSER)
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
         }
 
         fun stopBrowser(context: Context) {
             val intent = Intent(context, GhostService::class.java).setAction(ACTION_STOP_BROWSER)
-            ContextCompat.startForegroundService(context, intent)
+            startForegroundOrService(context, intent)
+        }
+
+        private fun startForegroundOrService(context: Context, intent: Intent) {
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (t: Throwable) {
+                Log.e(TAG, "startForegroundService failed, falling back to startService", t)
+                try {
+                    context.startService(intent)
+                } catch (t2: Throwable) {
+                    Log.e(TAG, "startService failed", t2)
+                }
+            }
         }
     }
 }

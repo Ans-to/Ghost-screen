@@ -37,11 +37,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
 import com.ghostdisplay.app.ui.theme.GhostDanger
 import com.ghostdisplay.app.ui.theme.GhostMint
 import com.ghostdisplay.app.ui.theme.GhostMuted
@@ -84,7 +82,7 @@ fun TabCard(
     onClose: (() -> Unit)? = null,
 ) {
     val view = LocalView.current
-    val bmp = remember(card.id) { card.icon?.toBitmap(192, 192) }
+    val bmp = remember(card.id, card.icon) { card.icon?.safeImageBitmap(192) }
     val shape = RoundedCornerShape(20.dp)
     val borderColor = when {
         selected -> GhostMint
@@ -100,7 +98,7 @@ fun TabCard(
             .combinedClickable(
                 onClick = onOpen,
                 onLongClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    runCatching { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
                     onLongPress()
                 },
             ),
@@ -146,7 +144,7 @@ fun TabCard(
         ) {
             if (bmp != null) {
                 Image(
-                    bitmap = bmp.asImageBitmap(),
+                    bitmap = bmp,
                     contentDescription = null,
                     modifier = Modifier
                         .size(64.dp)

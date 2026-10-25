@@ -53,10 +53,13 @@ object HiddenLaunch {
     }
 
     fun stop(context: Context, session: GhostSession) {
-        val i = Intent(context, GhostService::class.java)
-            .setAction(GhostStopReceiver.ACTION_STOP_SESSION)
-            .putExtra(GhostService.EXTRA_SESSION_ID, session.id)
-        context.startService(i)
+        try {
+            val i = Intent(context, GhostService::class.java)
+                .setAction(GhostStopReceiver.ACTION_STOP_SESSION)
+                .putExtra(GhostService.EXTRA_SESSION_ID, session.id)
+            context.startService(i)
+        } catch (_: Throwable) {
+        }
     }
 
     fun stopAll(context: Context) {
@@ -64,18 +67,24 @@ object HiddenLaunch {
     }
 
     fun openViewer(context: Context, session: GhostSession) {
-        context.startActivity(
-            Intent(context, AppViewerActivity::class.java)
-                .putExtra(AppViewerActivity.EXTRA_SESSION_ID, session.id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        try {
+            context.startActivity(
+                Intent(context, AppViewerActivity::class.java)
+                    .putExtra(AppViewerActivity.EXTRA_SESSION_ID, session.id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (_: Throwable) {
+        }
     }
 
     fun openRemote(context: Context, session: GhostSession) {
-        context.startActivity(
-            Intent(context, RemoteControlActivity::class.java)
-                .putExtra(RemoteControlActivity.EXTRA_SESSION_ID, session.id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        try {
+            context.startActivity(
+                Intent(context, RemoteControlActivity::class.java)
+                    .putExtra(RemoteControlActivity.EXTRA_SESSION_ID, session.id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (_: Throwable) {
+        }
     }
 }

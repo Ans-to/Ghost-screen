@@ -646,8 +646,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.0"', gradle)
-        self.assertIn("versionCode = 3", gradle)
+        self.assertIn('versionName = "1.3.4"', gradle)
+        self.assertIn("versionCode = 7", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,8 +673,136 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.0-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.0", wf)
+        self.assertIn("GhostDisplay-1.3.4-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.4", wf)
+
+    def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
+        launcher = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "launch",
+                "AppLauncher.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("DisplayTrampolineActivity", launcher)
+        self.assertIn("startOwnActivityOnDisplay", launcher)
+        self.assertNotIn("com.android.chrome", launcher)
+        trampoline = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "launch",
+                "DisplayTrampolineActivity.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertNotIn("options.launchDisplayId", trampoline)
+        self.assertNotIn("ActivityOptions", trampoline)
+        self.assertNotIn("finishAndRemoveTask", trampoline)
+        engine = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "display",
+                "VirtualDisplayEngine.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        create = engine.split("val attempts = VirtualDisplayFlags.attempts")[1].split("surface.close()")[0]
+        self.assertLess(create.find("createViaDisplayManager"), create.find("createViaMediaProjection"))
+        audio = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "audio",
+                "AudioRouter.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertNotIn("sampleRate / 2", audio)
+        self.assertIn("alignedAudioBufferBytes", audio)
+
+    def test_hold_chooser_is_not_modal_bottom_sheet(self):
+        sheet = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "AppActionSheet.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertNotIn("ModalBottomSheet(", sheet)
+        self.assertNotIn("rememberModalBottomSheetState", sheet)
+        hold = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "HoldActionActivity.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertNotIn("enableEdgeToEdge", hold)
+        self.assertNotIn("onboardingComplete", hold)
+
+    def test_service_promotes_foreground_immediately(self):
+        svc = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "service",
+                "GhostService.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        on_start = svc.split("fun onStartCommand(")[1].split("return START_STICKY")[0]
+        self.assertIn("startAsForeground(", on_start)
+        self.assertLess(on_start.find("startAsForeground("), on_start.find("when (intent?.action)"))
 
 
 class UserFlowScenarioTests(unittest.TestCase):

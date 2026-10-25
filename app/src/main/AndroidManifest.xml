@@ -97,6 +97,16 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
         <activity
+            android:name=".launch.DisplayTrampolineActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.GhostDisplay.Hold"
+            android:label="@string/hold_action_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:noHistory="true" />
+
+        <activity
             android:name=".ui.HoldActionActivity"
             android:exported="false"
             android:excludeFromRecents="true"
@@ -104,6 +114,7 @@
             android:taskAffinity=""
             android:theme="@style/Theme.GhostDisplay.Hold"
             android:label="@string/hold_action_title"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustNothing" />
 
         <service

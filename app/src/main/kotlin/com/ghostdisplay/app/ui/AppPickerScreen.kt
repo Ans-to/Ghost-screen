@@ -36,9 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
 import com.ghostdisplay.app.data.AppProfile
 import com.ghostdisplay.app.data.Compatibility
 import com.ghostdisplay.app.data.GhostSession
@@ -141,12 +139,12 @@ private fun AppRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val bmp = remember(row.app.packageName) {
-            row.icon?.toBitmap(96, 96)
+            row.icon?.safeImageBitmap(96)
         }
         Box(Modifier.size(44.dp)) {
             if (bmp != null) {
                 Image(
-                    bitmap = bmp.asImageBitmap(),
+                    bitmap = bmp,
                     contentDescription = null,
                     modifier = Modifier
                         .size(44.dp)
