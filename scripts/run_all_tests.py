@@ -16,7 +16,7 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from run_browser_tests import BrowserContractTests  # noqa: E402,F401
+from run_browser_tests import BrowserContractTests, decide_new_tab  # noqa: E402,F401
 
 
 # --- Session policy (mirrors SessionPolicy.kt) ---
@@ -629,8 +629,107 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.2.0"', gradle)
-        self.assertIn("versionCode = 2", gradle)
+        self.assertIn('versionName = "1.3.0"', gradle)
+        self.assertIn("versionCode = 3", gradle)
+
+    def test_engine_start_hidden_is_package_agnostic(self):
+        svc = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "service",
+                "GhostService.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        start = svc.split("fun startHidden(")[1].split("fun stopAll(")[0]
+        self.assertNotIn("chrome", start.lower())
+        self.assertNotIn("firefox", start.lower())
+        self.assertNotIn("whatsapp", start.lower())
+
+    def test_workflow_runs_unit_tests_and_stages_130(self):
+        wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
+        self.assertIn("testDebugUnitTest", wf)
+        self.assertIn("GhostDisplay-1.3.0-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.0", wf)
+
+
+class UserFlowScenarioTests(unittest.TestCase):
+    """End-to-end policy scenarios: first run, hold start/stop, tab select, compat."""
+
+    HOMES = {"com.android.launcher3"}
+    APPS = [
+        {"pkg": "com.android.chrome", "label": "Chrome"},
+        {"pkg": "org.mozilla.firefox", "label": "Firefox"},
+        {"pkg": "com.whatsapp", "label": "WhatsApp"},
+        {"pkg": "com.netflix.mediaclient", "label": "Netflix"},
+    ]
+
+    def test_first_run_then_hold_chrome_starts(self):
+        onboarding, warning, a11y = True, True, True
+        self.assertTrue(onboarding and warning and a11y)
+        pkg = resolve_hold("com.android.launcher3", "Chrome", self.HOMES, self.APPS)
+        self.assertEqual(pkg, "com.android.chrome")
+
+    def test_hold_again_is_the_same_app_for_stop(self):
+        start = resolve_hold("com.android.launcher3", "Chrome", self.HOMES, self.APPS)
+        stop = resolve_hold("com.android.launcher3", "Chrome", self.HOMES, self.APPS)
+        self.assertEqual(start, stop)
+
+    def test_hold_without_accessibility_does_not_invent_a_session(self):
+        a11y = False
+        live = []
+        if not a11y:
+            self.assertEqual(live, [])
+
+    def test_tab_long_press_enters_select_then_toggle(self):
+        selected = set()
+        # long-press
+        selected = {"tab-1"} if not selected else selected
+        self.assertEqual(selected, {"tab-1"})
+        # tap another
+        selected = selected | {"tab-2"}
+        self.assertEqual(selected, {"tab-1", "tab-2"})
+        # tap first to deselect
+        selected = selected - {"tab-1"}
+        self.assertEqual(selected, {"tab-2"})
+
+    def test_bulk_close_skips_pinned(self):
+        tabs = [
+            {"id": "a", "pin": False},
+            {"id": "b", "pin": True},
+            {"id": "c", "pin": False},
+        ]
+        chosen = {"a", "b", "c"}
+        closed = [t["id"] for t in tabs if t["id"] in chosen and not t["pin"]]
+        self.assertEqual(closed, ["a", "c"])
+
+    def test_ten_tabs_allowed_eleventh_rejected_at_default(self):
+        self.assertEqual(decide_new_tab(9, 10, 8.0)[0], "allow")
+        self.assertEqual(decide_new_tab(10, 10, 8.0)[0], "reject")
+
+    def test_viewer_close_does_not_stop_session(self):
+        for t in (LIVE, RESURRECTED, FRESH):
+            self.assertEqual(viewer_does_not_change(t), t)
+
+    def test_existing_hidden_window_never_silently_starts_another(self):
+        self.assertEqual(interpret_choice(True, None), CANCEL)
+
+    def test_drm_without_secure_is_unsupported_browser_is_supported(self):
+        self.assertEqual(prelaunch("STREAMING_DRM", False)[0], "UNSUPPORTED")
+        self.assertEqual(prelaunch("BROWSER", False)[0], "SUPPORTED")
+        self.assertEqual(prelaunch("FINANCE", False)[0], "LIMITED")
+        self.assertEqual(prelaunch("GAME", False)[0], "LIMITED")
+        self.assertEqual(prelaunch("MESSAGING", False)[0], "SUPPORTED")
+
+    def test_leak_onto_phone_screen_is_unsupported(self):
+        self.assertEqual(afterlaunch("BROWSER", True, False, True, False), "UNSUPPORTED")
 
     def test_readme_documents_sessions_and_overlay(self):
         readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()

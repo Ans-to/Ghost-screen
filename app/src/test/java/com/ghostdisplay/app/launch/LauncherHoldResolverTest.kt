@@ -106,6 +106,33 @@ class LauncherHoldResolverTest {
         assertThat(hit).isNull()
     }
 
+    @Test
+    fun caseInsensitiveAndDotSeparator() {
+        val hit = LauncherHoldResolver.resolve(
+            HoldCandidate(homes.first(), "CHROME · 2 notifications", null, null),
+            apps, homes, self,
+        )
+        assertThat(hit).isEqualTo(chrome)
+    }
+
+    @Test
+    fun emptyHomeSetNeverResolves() {
+        val hit = LauncherHoldResolver.resolve(
+            HoldCandidate(homes.first(), "Chrome", null, null),
+            apps, emptySet(), self,
+        )
+        assertThat(hit).isNull()
+    }
+
+    @Test
+    fun packageNameAsLabelResolvesUniquely() {
+        val hit = LauncherHoldResolver.resolve(
+            HoldCandidate(homes.first(), "com.whatsapp", null, null),
+            apps, homes, self,
+        )
+        assertThat(hit).isEqualTo(whatsapp)
+    }
+
     private fun app(pkg: String, label: String) = LaunchableApp(
         packageName = pkg,
         activityName = "$pkg.Main",
