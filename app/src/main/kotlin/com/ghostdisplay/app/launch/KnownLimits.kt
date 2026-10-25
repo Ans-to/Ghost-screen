@@ -26,7 +26,7 @@ object KnownLimits {
         Entry(
             match = { pkg, label -> pkg.contains("chrome") || pkg.contains("firefox") || pkg.contains("browser") || label.contains("browser", true) },
             category = "Browser",
-            summary = "Browsers are the most reliable hidden-launch targets. Control works when Accessibility can see the virtual-display window.",
+            summary = "This is your real browser on a live hidden display. Open 10+ tabs in the Viewer. The virtual display stays in the foreground so the browser is not treated as a background app.",
         ),
         Entry(
             match = { pkg, _ -> pkg.contains("vlc") || pkg.contains("mxtech") || pkg.contains("gallery") || pkg.contains("videoplayer") },

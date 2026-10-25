@@ -50,8 +50,8 @@ fun OnboardingScreen(onFinished: () -> Unit) {
     val pages = listOf(
         Page(
             Icons.Outlined.Language,
-            "Persistent Browser is the main mode",
-            "GhostDisplay keeps at least 10 WebView tabs alive on a hidden virtual display — not Chrome, not Firefox. Tabs are never discarded, frozen, or throttled by us. Close the Viewer, lock the phone, use another app: every tab keeps rendering and playing. Only you can close a tab.",
+            "Your real Chrome, hidden",
+            "GhostDisplay launches the Chrome (or Firefox) already on your phone — the real app, same tabs, same account — on a hidden virtual display. Open at least 10 tabs in the Viewer. The display stays live with a wake lock, so the browser is not backgrounded the way it is when you leave it for the home screen. Closing the Viewer does not stop it.",
         ),
         Page(
             Icons.Outlined.VisibilityOff,

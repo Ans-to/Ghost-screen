@@ -19,12 +19,8 @@ class RestoreWorker(
         val app = applicationContext as? GhostApp ?: return Result.success()
         val restore = app.container.prefs.restoreOnBoot.first()
         if (!restore) return Result.success()
-        val tabs = app.container.tabs.openTabs()
-        if (tabs.isNotEmpty()) {
-            GhostService.startBrowser(applicationContext)
-        }
         val active = app.container.db.sessions().active()
-        if (active.isEmpty() && tabs.isEmpty()) return Result.success()
+        if (active.isEmpty()) return Result.success()
         if (active.isNotEmpty()) {
             val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             GhostNotifications.ensureChannels(applicationContext)

@@ -77,6 +77,7 @@ fun GhostAppUi(vm: GhostViewModel) {
 @Composable
 private fun MainTabs(vm: GhostViewModel) {
     var tab by remember { mutableStateOf(Tab.Browser) }
+    val browserRows = remember(rows) { rows.filter { isInstalledBrowser(it.app) } }
     var settingsPkg by remember { mutableStateOf<String?>(null) }
     val rows by vm.rows.collectAsState()
     val query by vm.query.collectAsState()
@@ -222,7 +223,7 @@ private fun MainTabs(vm: GhostViewModel) {
                     selected = tab == Tab.Browser,
                     onClick = { tab = Tab.Browser },
                     icon = { Icon(Icons.Outlined.Language, contentDescription = null) },
-                    label = { Text("Browser") },
+                    label = { Text("Browsers") },
                 )
                 NavigationBarItem(
                     selected = tab == Tab.Apps,
@@ -247,7 +248,24 @@ private fun MainTabs(vm: GhostViewModel) {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                Tab.Browser -> BrowserHomeScreen()
+                Tab.Browser -> AppPickerScreen(
+                    rows = browserRows,
+                    query = query,
+                    onQuery = vm::setQuery,
+                    onRunHidden = { app ->
+                        scope.launch {
+                            val p = vm.profileOf(app.packageName)
+                            requestLaunch(app, p)
+                        }
+                    },
+                    onSettings = { settingsPkg = it.packageName },
+                    liveByPackage = sessions.filter { it.status == SessionStatus.RUNNING }
+                        .associateBy { it.packageName },
+                    onOpenViewer = { openViewer(it) },
+                    searchPlaceholder = "Search browsers",
+                    intro = "This is your real installed browser — Chrome, Firefox, or whatever you have — same tabs, same account, same data. Run hidden puts it on a live virtual display so it is not backgrounded. Open at least 10 tabs in the Viewer. Closing the Viewer does not stop the browser.",
+                    emptyMessage = "No installed browser found. Install Chrome, then it will show up here.",
+                )
                 Tab.Apps -> AppPickerScreen(
                     rows = rows,
                     query = query,
@@ -262,6 +280,7 @@ private fun MainTabs(vm: GhostViewModel) {
                     liveByPackage = sessions.filter { it.status == SessionStatus.RUNNING }
                         .associateBy { it.packageName },
                     onOpenViewer = { openViewer(it) },
+                    intro = "Every launchable app can run as a hidden window of the real installed app — same account, same data. A 6dp badge means a hidden window is already live; tap the row to reopen it. For Chrome tabs, use the Browsers tab.",
                 )
                 Tab.Sessions -> ActiveSessionsScreen(
                     sessions = sessions,
