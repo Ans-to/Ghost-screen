@@ -65,6 +65,9 @@ fun AppPickerScreen(
     onSettings: (LaunchableApp) -> Unit,
     liveByPackage: Map<String, GhostSession> = emptyMap(),
     onOpenViewer: (GhostSession) -> Unit = {},
+    searchPlaceholder: String = "Search apps",
+    intro: String = "",
+    emptyMessage: String = "No matching apps.",
 ) {
     val filtered = remember(rows, query) {
         val q = query.trim().lowercase()
@@ -81,20 +84,30 @@ fun AppPickerScreen(
                 .fillMaxWidth()
                 .padding(16.dp),
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-            placeholder = { Text("Search apps") },
+            placeholder = { Text(searchPlaceholder) },
             singleLine = true,
         )
-        Text(
-            "Every launchable app can run as a hidden window of the real installed app — same account, same data. A 6dp badge means a hidden window is already live; tap the row to reopen it. For 10 persistent tabs, use the Browser tab — installed browsers may discard background tabs and GhostDisplay cannot prevent that.",
-            modifier = Modifier.padding(horizontal = 16.dp),
-            color = GhostMuted,
-        )
-        ExternalBrowserBanner()
+        if (intro.isNotBlank()) {
+            Text(
+                intro,
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = GhostMuted,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         LazyColumn(
             contentPadding = PaddingValues(bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (filtered.isEmpty()) {
+                item {
+                    Text(
+                        emptyMessage,
+                        modifier = Modifier.padding(16.dp),
+                        color = GhostMuted,
+                    )
+                }
+            }
             items(filtered, key = { it.app.packageName }) { row ->
                 AppRow(
                     row = row,

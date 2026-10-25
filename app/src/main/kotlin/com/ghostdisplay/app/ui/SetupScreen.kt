@@ -83,9 +83,8 @@ fun SetupScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Setup", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "One-time grants. GhostDisplay never asks for root, Shizuku, ADB, or a second app.",
+            "One-time grants. After this you start and stop by holding an app. GhostDisplay never asks for root, Shizuku, ADB, or a second app.",
             color = GhostMuted,
         )
         items.forEach { item ->
@@ -137,7 +136,7 @@ fun SetupScreen() {
                     Column(Modifier.weight(1f).padding(end = 8.dp)) {
                         Text("Offer restore after reboot")
                         Text(
-                            "Persistent Browser tabs restore automatically (no MediaProjection needed for the engine). Hidden *apps* only get a notification — screen-capture consent cannot survive a reboot.",
+                            "After reboot, hidden Chrome (and other apps) cannot auto-relaunch: screen-capture consent does not survive reboot. You get a notification to start the hidden window again.",
                             color = GhostMuted,
                         )
                     }

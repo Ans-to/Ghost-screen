@@ -17,7 +17,7 @@ object CompatibilityProbe {
 
     fun caveatFor(category: AppCategory): String = when (category) {
         AppCategory.BROWSER ->
-            "This browser may manage its own tabs. GhostDisplay cannot stop it from discarding background tabs. For guaranteed persistent tabs, use Persistent Browser, or add each page as its own hidden session."
+            "This is your real browser on a live hidden display, not an in-app WebView. Keep the session running and open tabs in the Viewer. GhostDisplay does not inject into the browser’s own tab manager; the live virtual display is what keeps it from being treated as a background app."
         AppCategory.VIDEO ->
             "Video apps usually stay live on a MediaProjection virtual display. Audio can continue with the screen off when capture is granted."
         AppCategory.STREAMING_DRM ->

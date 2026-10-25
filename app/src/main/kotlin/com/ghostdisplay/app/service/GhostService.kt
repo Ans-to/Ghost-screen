@@ -111,8 +111,6 @@ class GhostService : Service() {
                 scope.launch {
                     handleResurrect()
                     offerRestoreIfNeeded()
-                    val tabs = runCatching { app().container.tabs.openTabs() }.getOrDefault(emptyList())
-                    if (tabs.isNotEmpty()) handleStartBrowser("sticky-restart")
                 }
             }
         }

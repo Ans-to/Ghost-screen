@@ -1,8 +1,8 @@
 # GhostDisplay
 
-GhostDisplay **1.2.0** — a standalone native Android app whose **primary mode is Persistent Browser**: a WebView tab engine hosted on a hidden `VirtualDisplay` that keeps **at least 10 tabs alive, rendering, and playing media** until you close them. Installed browsers (Chrome, Firefox, …) are a secondary “External Browser” mode and **cannot** guarantee this — they own their own tab discard policy.
+GhostDisplay **1.3.0** — a standalone native Android app that runs **your real Chrome** (or Firefox, or any installed browser) on a hidden `VirtualDisplay`. Same app, same tabs, same account. Open **at least 10 tabs** in the Viewer; the display stays live with a wake lock so the browser is not backgrounded the way it is when you leave it for the home screen.
 
-It can also launch any installed app on an invisible virtual display (no floating window, split-screen, PiP, or mirroring).
+It can also launch any other installed app the same way (no floating window, split-screen, PiP, or mirroring). There is no in-app WebView “replacement browser” in the main UI.
 
 **No Shizuku. No root. No ADB. No companion app. No secondary service to install.**
 
@@ -20,7 +20,7 @@ GhostDisplay does **not** record or exfiltrate frames. The optional debug previe
 
 There is no APK attached to this chat. After GitHub Actions finishes a build, download it here:
 
-1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.2.0-debug.apk`
+1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.3.0-debug.apk`
 2. **Actions artifact** (every PR / push): [github.com/Ans-to/Ghost-screen/actions](https://github.com/Ans-to/Ghost-screen/actions) → latest **Build APK** run → Artifacts → **GhostDisplay-apk** (zip; unzip the APK)
 
 Install on an Android 10+ phone: allow unknown sources / “Install unknown apps” for your browser or Files, then open the APK. Debug id is `com.ghostdisplay.app.debug`.
@@ -79,60 +79,32 @@ Not requested, not used: root, Shizuku, `WRITE_SECURE_SETTINGS`, `DUMP`, `INJECT
 
 ---
 
-## Persistent Browser (primary)
+## Hidden Chrome (primary)
 
-This is the only way GhostDisplay can guarantee no auto-discard, no background throttling, and full session persistence. We do **not** drive Chrome.
+GhostDisplay does **not** replace Chrome with an in-app WebView. It launches the **real installed browser** on a hidden virtual display and keeps that display alive.
 
 ### How to use
 
-1. Open GhostDisplay → **Browser**.
-2. Tap **Start persistent browser**. Grant notifications / battery exemption as in Setup. MediaProjection is optional (needed to *route* hidden audio; tabs still play without it).
-3. Tap **Open in Viewer**. Create tabs (default cap 10, hard cap 16). Load mixed sites — static, YouTube, music, a web game, a social feed.
-4. Play video in one tab, switch to another, **close the Viewer**, use a different app, lock the phone. Every tab stays live. Audio keeps mixing. Closing Viewer does not call `WebView.onPause()`, `pauseTimers()`, `destroy()`, or `GONE`.
-5. Come back hours later: the Viewer shows every tab where you left it.
-6. Force-stop the app: reopen it. All **tab records** restore automatically (URL, title, scroll, form snapshot, back stack, cookies/localStorage/IndexedDB/service workers via the shared non-incognito WebView profile). If RAM is too tight, a tab is **“paused by system, tap to resume”** — that is the only non-live state, and the record is never dropped.
-7. Manual close (with confirmation) is the **only** way a tab disappears.
+1. Open GhostDisplay **once**. Finish onboarding. Enable **Accessibility** (so hold-on-home works) and notifications.
+2. Leave GhostDisplay. On the home screen, **hold Chrome** (or any app). Tap **Run hidden**. Grant MediaProjection when asked (needed for a capture-capable display and audio routing).
+3. Hold the same app again to **Stop hidden**, or **Open viewer**. In the viewer, tap **Tabs** (or Chrome’s tab button), then **hold a tab to select it** — same grid as Chrome. Open **at least 10 tabs**.
+4. Close the Viewer, use another app, lock the phone. The hidden Chrome process stays on the virtual display (foreground service + `PARTIAL_WAKE_LOCK`). Closing Viewer does not stop Chrome.
+5. You do not need to reopen GhostDisplay to start or stop. If hold-on-home does nothing (some launchers never fire the event), open GhostDisplay and hold the app in the grid instead — it will not fail silently.
+6. Your home-screen Chrome icon still opens a second window of the same real app on the main display — GhostDisplay never fights that icon.
 
-### Restore guarantees
+GhostDisplay does not inject into Chrome’s tab manager. The mechanism is: Chrome is not backgrounded, because its display is still live.
 
-| Event | What happens |
-|---|---|
-| Close Viewer | Nothing pauses. Tabs keep rendering and playing. |
-| Screen off / other app | Foreground service + `PARTIAL_WAKE_LOCK`. Media continues. |
-| Process death / force-stop | Room records rebuild every tab. Cookies survive. Playback position may reset. |
-| Reboot + “Restore after reboot” | Engine and tabs come back automatically (no MediaProjection until you grant it again for audio routing). |
-| OS low memory | Extra tabs park as “paused by system”. **Never deleted.** |
-| Kill switch / Stop engine | WebViews released; **records kept** and restored on next start. |
+### Test checklist (hidden Chrome)
 
-There is no tab eviction, no swipe-to-close without confirm, no inactive-tab cleanup.
-
-### Memory guidance
-
-- Default 10 tabs, configurable to 16 (warning at 9+ and 11+).
-- `android:largeHeap="true"`. Each live tab is estimated ~150 MB (lite mode ~80 MB).
-- Devices with **under 4 GB RAM** will likely struggle past 8 video-heavy tabs. The OS may kill the process; tabs restore, playback position may reset.
-- Per-tab **lite mode** reduces cache/pre-raster cost. Memory bar is on Viewer and Browser home.
-
-### Per-site caveats
-
-- **DRM** (Netflix, Disney+, etc.) may refuse a virtual display or a non-visible tab. Per-tab warning + optional **keep-visible shim** (`document.hidden` / `visibilityState`). The shim is **best-effort** and cannot override Widevine.
-- Some players still pause; enable the shim on that tab.
-- **External Browser** (installed Chrome/Firefox on a virtual display): the browser may discard background tabs. GhostDisplay cannot prevent that. The Apps tab states this plainly.
-
-### Test checklist (Persistent Browser)
-
-- [ ] Create 10 tabs with mixed sites (static, YouTube, music, web game, social).
-- [ ] Play video in tab 3, switch to tab 7, close Viewer, open another app: tab 3 audio continues, tab 7 keeps running.
-- [ ] Lock the phone 30 minutes, unlock, reopen Viewer: all 10 present, state intact.
-- [ ] Force-stop from system settings, reopen: all 10 records restored, logins intact (cookies).
-- [ ] Close tab 5 with confirmation: only tab 5 dies; the other 9 keep running.
-- [ ] No tab disappears without that confirm (except OS kill → restore, not loss).
+- [ ] Run hidden on the installed Chrome. Physical screen does not show Chrome.
+- [ ] In Viewer, open 10 tabs. Close Viewer, use another app: Chrome stays running hidden.
+- [ ] Play media in a Chrome tab, turn the screen off: audio continues when MediaProjection + audio capture were granted.
+- [ ] Stop on the session card fully releases the virtual display.
 - [ ] Still no Shizuku / root / ADB / companion app.
 
 ```
 ./gradlew :app:testDebugUnitTest
 python3 scripts/run_all_tests.py
-python3 scripts/run_browser_tests.py
 ```
 
 ## How hidden-app mode works
@@ -204,10 +176,11 @@ OEM policy is the main variable. Some devices ignore `setLaunchDisplayId` for no
 1. Three onboarding pages: nothing shows on your screen; control is Accessibility; hidden is not isolated.
 2. Warning screen you must accept.
 3. **Setup** checklist with one-tap deep links.
-4. **Apps** — searchable launcher list of every launchable app, **Run hidden** per row, 6dp live badge, gear for per-app settings, compatibility badge (Supported / Limited / Unsupported).
-5. **Sessions** — tier (LIVE / RESURRECTED / FRESH), notices, Open Viewer, Remote Control, Stop, kill switch, session log.
-6. Silent grouped return notifications (`IMPORTANCE_MIN`) plus the persistent FGS notification with Stop.
-7. Optional 8dp overlay return-indicator dot (opt-in, off by default).
+4. **Browsers** — installed Chrome/Firefox/etc. **Run hidden** launches the real browser. Open 10+ tabs in Viewer.
+5. **Apps** — every other launchable app, same engine, 6dp live badge, gear, compatibility badge.
+6. **Sessions** — tier (LIVE / RESURRECTED / FRESH), notices, Open Viewer, Remote Control, Stop, kill switch, session log.
+7. Silent grouped return notifications (`IMPORTANCE_MIN`) plus the persistent FGS notification with Stop.
+8. Optional 8dp overlay return-indicator dot (opt-in, off by default).
 
 Per-app settings: resolution, DPI, orientation, surface mode (ImageReader vs MediaProjection), secure display, audio, block notifications. Defaults match the physical display and MediaProjection.
 

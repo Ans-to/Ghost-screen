@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.VolumeOff
@@ -69,6 +72,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ghostdisplay.app.control.CoordinateMapper
 import com.ghostdisplay.app.service.GhostService
+import com.ghostdisplay.app.ui.SwitcherCard
+import com.ghostdisplay.app.ui.TabCard
+import com.ghostdisplay.app.ui.TabSelectBar
 import com.ghostdisplay.app.ui.theme.GhostDanger
 import com.ghostdisplay.app.ui.theme.GhostMint
 import com.ghostdisplay.app.ui.theme.GhostMuted
@@ -123,7 +129,9 @@ private fun ViewerScreen(onFinish: () -> Unit) {
     val context = LocalContext.current
     var address by remember { mutableStateOf("") }
     var inject by remember { mutableStateOf("") }
-    var showSwitcher by remember { mutableStateOf(false) }
+    var showSwitcher by remember { mutableStateOf(true) }
+    var selectedIds by remember { mutableStateOf(emptySet<String>()) }
+    var tabQuery by remember { mutableStateOf("") }
     var pendingClose by remember { mutableStateOf<TabRecord?>(null) }
     var pendingNewWarnings by remember { mutableStateOf<List<String>?>(null) }
     var longPressTab by remember { mutableStateOf<TabRecord?>(null) }
@@ -148,7 +156,7 @@ private fun ViewerScreen(onFinish: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Persistent Browser") },
+                title = { Text(if (showSwitcher) "${tabs.size} tabs" else "Persistent Browser") },
                 navigationIcon = {
                     IconButton(onClick = onFinish) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Close viewer")
@@ -160,6 +168,41 @@ private fun ViewerScreen(onFinish: () -> Unit) {
             )
         },
     ) { padding ->
+        if (showSwitcher) {
+            BrowserTabGrid(
+                modifier = Modifier.padding(padding),
+                tabs = tabs,
+                query = tabQuery,
+                onQuery = { tabQuery = it },
+                selectedIds = selectedIds,
+                onSelectedIds = { selectedIds = it },
+                onOpen = { tab ->
+                    scope.launch { tm?.select(tab.id) }
+                    selectedIds = emptySet()
+                    showSwitcher = false
+                },
+                onCloseRequest = { pendingClose = it },
+                onNewTab = {
+                    scope.launch {
+                        when (val r = tm?.newTab()) {
+                            is TabOpResult.Rejected -> Toast.makeText(context, r.reason, Toast.LENGTH_LONG).show()
+                            is TabOpResult.Ok -> if (r.warnings.isNotEmpty()) pendingNewWarnings = r.warnings
+                            null -> GhostService.startBrowser(context)
+                        }
+                    }
+                },
+                onCloseSelected = { ids ->
+                    val chosen = tabs.filter { it.id in ids }
+                    if (chosen.size == 1) pendingClose = chosen.first()
+                    else chosen.forEach { tab ->
+                        scope.launch {
+                            tm?.closeTab(tab.id, userConfirmed = true, closePinnedExplicit = false)
+                        }
+                    }
+                    selectedIds = emptySet()
+                },
+            )
+        } else {
         Column(
             Modifier
                 .fillMaxSize()
@@ -275,44 +318,7 @@ private fun ViewerScreen(onFinish: () -> Unit) {
             }
             notices.take(2).forEach { Text(it, color = GhostMuted, modifier = Modifier.padding(horizontal = 8.dp)) }
         }
-    }
-
-    if (showSwitcher) {
-        AlertDialog(
-            onDismissRequest = { showSwitcher = false },
-            confirmButton = { TextButton(onClick = { showSwitcher = false }) { Text("Close") } },
-            title = { Text("All tabs") },
-            text = {
-                LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.height(360.dp)) {
-                    items(tabs, key = { it.id }) { tab ->
-                        Card(
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .combinedClickable(
-                                    onClick = {
-                                        scope.launch { tm?.select(tab.id) }
-                                        showSwitcher = false
-                                    },
-                                    onLongClick = { longPressTab = tab },
-                                ),
-                        ) {
-                            Column(Modifier.padding(8.dp)) {
-                                Text(tab.displayTitle, maxLines = 2)
-                                Text(UrlNormalizer.hostOf(tab.url), color = GhostMuted, maxLines = 1)
-                                Text(
-                                    when {
-                                        tab.liveStatus == TabLiveStatus.PAUSED_BY_SYSTEM -> "paused by system"
-                                        tab.audioPlaying -> "live · audio"
-                                        else -> "live"
-                                    },
-                                    color = if (tab.liveStatus == TabLiveStatus.PAUSED_BY_SYSTEM) GhostWarn else GhostMint,
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-        )
+        }
     }
 
     pendingClose?.let { tab ->
@@ -387,6 +393,110 @@ private fun ViewerScreen(onFinish: () -> Unit) {
             },
             confirmButton = { TextButton(onClick = { showHistory = false }) { Text("OK") } },
         )
+    }
+}
+
+@Composable
+private fun BrowserTabGrid(
+    modifier: Modifier,
+    tabs: List<TabRecord>,
+    query: String,
+    onQuery: (String) -> Unit,
+    selectedIds: Set<String>,
+    onSelectedIds: (Set<String>) -> Unit,
+    onOpen: (TabRecord) -> Unit,
+    onCloseRequest: (TabRecord) -> Unit,
+    onNewTab: () -> Unit,
+    onCloseSelected: (Set<String>) -> Unit,
+) {
+    val selecting = selectedIds.isNotEmpty()
+    val filtered = remember(tabs, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) tabs
+        else tabs.filter {
+            it.displayTitle.lowercase().contains(q) || it.url.lowercase().contains(q)
+        }
+    }
+    Column(modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQuery,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            placeholder = { Text("Search tabs") },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+        )
+        Text(
+            "Hold a tab to select it. Tap to open.",
+            color = GhostMuted,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (filtered.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("No tabs yet. Tap + for a new tab.", color = GhostMuted)
+                }
+            }
+            items(filtered, key = { it.id }) { tab ->
+                TabCard(
+                    card = SwitcherCard(
+                        id = tab.id,
+                        title = tab.displayTitle,
+                        subtitle = UrlNormalizer.hostOf(tab.url).ifBlank { tab.url },
+                        pinned = tab.pinned,
+                        live = tab.liveStatus == TabLiveStatus.LIVE,
+                        audio = tab.audioPlaying,
+                    ),
+                    selected = tab.id in selectedIds,
+                    selecting = selecting,
+                    onOpen = {
+                        if (selecting) {
+                            onSelectedIds(
+                                if (tab.id in selectedIds) selectedIds - tab.id else selectedIds + tab.id,
+                            )
+                        } else onOpen(tab)
+                    },
+                    onLongPress = {
+                        onSelectedIds(
+                            if (selecting) {
+                                if (tab.id in selectedIds) selectedIds - tab.id else selectedIds + tab.id
+                            } else setOf(tab.id),
+                        )
+                    },
+                    onClose = { onCloseRequest(tab) },
+                )
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onNewTab) {
+                Icon(Icons.Outlined.Add, contentDescription = "New tab")
+            }
+            Text("${tabs.size} tabs", color = GhostMuted, modifier = Modifier.weight(1f))
+        }
+        if (selecting) {
+            TabSelectBar(
+                count = selectedIds.size,
+                onDone = { onSelectedIds(emptySet()) },
+                onOpen = selectedIds.singleOrNull()?.let { id ->
+                    {
+                        tabs.firstOrNull { it.id == id }?.let(onOpen)
+                        onSelectedIds(emptySet())
+                    }
+                },
+                onCloseSelected = { onCloseSelected(selectedIds) },
+                closeLabel = "Close",
+            )
+        }
     }
 }
 

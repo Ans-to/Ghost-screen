@@ -34,6 +34,10 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
             <action android:name="android.settings.ACCESSIBILITY_SETTINGS" />
         </intent>
     </queries>
@@ -91,6 +95,16 @@
             android:launchMode="singleTop"
             android:label="@string/app_viewer_title"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <activity
+            android:name=".ui.HoldActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.GhostDisplay.Hold"
+            android:label="@string/hold_action_title"
+            android:windowSoftInputMode="adjustNothing" />
 
         <service
             android:name=".service.GhostService"
