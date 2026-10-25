@@ -77,9 +77,9 @@ fun GhostAppUi(vm: GhostViewModel) {
 @Composable
 private fun MainTabs(vm: GhostViewModel) {
     var tab by remember { mutableStateOf(Tab.Browser) }
-    val browserRows = remember(rows) { rows.filter { isInstalledBrowser(it.app) } }
     var settingsPkg by remember { mutableStateOf<String?>(null) }
     val rows by vm.rows.collectAsState()
+    val browserRows = remember(rows) { rows.filter { isInstalledBrowser(it.app) } }
     val query by vm.query.collectAsState()
     val sessions by vm.sessions.collectAsState()
     val context = LocalContext.current
