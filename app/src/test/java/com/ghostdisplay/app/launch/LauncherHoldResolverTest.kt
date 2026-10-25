@@ -50,6 +50,21 @@ class LauncherHoldResolverTest {
     }
 
     @Test
+    fun textViewClassNameIsANormalIconNotAWidget() {
+        val hit = LauncherHoldResolver.resolve(
+            HoldCandidate(homes.first(), "Chrome", null, "android.widget.TextView"),
+            apps, homes, self,
+        )
+        assertThat(hit).isEqualTo(chrome)
+        assertThat(
+            LauncherHoldResolver.looksLikeWidget("android.widget.TextView"),
+        ).isFalse()
+        assertThat(
+            LauncherHoldResolver.looksLikeWidget("android.appwidget.AppWidgetHostView"),
+        ).isTrue()
+    }
+
+    @Test
     fun ignoresFoldersAndWidgets() {
         assertThat(
             LauncherHoldResolver.resolve(

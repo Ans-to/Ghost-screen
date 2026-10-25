@@ -438,8 +438,10 @@ LAUNCHER_CHROME = {
 def resolve_hold(event_pkg, label, homes, apps, self_pkg="com.ghostdisplay.app.debug", class_name=None):
     if not event_pkg or event_pkg == self_pkg or event_pkg not in homes:
         return None
-    if class_name and ("widget" in class_name.lower() or "searchbox" in class_name.lower()):
-        return None
+    if class_name:
+        cl = class_name.lower()
+        if "appwidget" in cl or "widgethost" in cl or "searchbox" in cl or "qsb" in cl:
+            return None
     raw = (label or "").strip()
     if not raw:
         return None
@@ -474,6 +476,21 @@ class LauncherHoldResolverTests(unittest.TestCase):
         self.assertEqual(
             resolve_hold("com.google.android.apps.nexuslauncher", "Chrome", self.HOMES, self.APPS),
             "com.android.chrome",
+        )
+
+    def test_textview_is_not_treated_as_app_widget(self):
+        self.assertEqual(
+            resolve_hold(
+                "com.android.launcher3", "Chrome", self.HOMES, self.APPS,
+                class_name="android.widget.TextView",
+            ),
+            "com.android.chrome",
+        )
+        self.assertIsNone(
+            resolve_hold(
+                "com.android.launcher3", "Chrome", self.HOMES, self.APPS,
+                class_name="android.appwidget.AppWidgetHostView",
+            ),
         )
 
     def test_hold_again_resolves_same_app_for_stop(self):

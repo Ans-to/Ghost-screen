@@ -49,7 +49,9 @@ object LauncherHoldResolver {
 
     fun looksLikeWidget(className: String?): Boolean {
         val c = className?.lowercase() ?: return false
-        return c.contains("widget") || c.contains("searchbox") || c.contains("qsb")
+        // android.widget.TextView contains "widget" — that is a normal icon, not an app widget.
+        return c.contains("appwidget") || c.contains("widgethost") ||
+            c.contains("searchbox") || c.contains("qsb")
     }
 
     /** Launcher chrome (dock labels, page indicators) — not an app icon. */
