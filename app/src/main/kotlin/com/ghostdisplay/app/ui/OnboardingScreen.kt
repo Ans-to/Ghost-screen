@@ -49,6 +49,11 @@ private data class Page(
 fun OnboardingScreen(onFinished: () -> Unit) {
     val pages = listOf(
         Page(
+            Icons.Outlined.TouchApp,
+            "Hold an app. That’s it.",
+            "Open GhostDisplay once. After setup, leave it. On your home screen, hold Chrome, WhatsApp, or any app — Run hidden appears. Hold it again to stop. You do not come back here to start or stop a hidden window.",
+        ),
+        Page(
             Icons.Outlined.Language,
             "Your real Chrome, hidden",
             "GhostDisplay launches the Chrome (or Firefox) already on your phone — the real app, same tabs, same account — on a hidden virtual display. Open at least 10 tabs in the Viewer. The display stays live with a wake lock, so the browser is not backgrounded the way it is when you leave it for the home screen. Closing the Viewer does not stop it.",
@@ -56,17 +61,12 @@ fun OnboardingScreen(onFinished: () -> Unit) {
         Page(
             Icons.Outlined.VisibilityOff,
             "Nothing shows on your screen",
-            "Pick any installed app. GhostDisplay launches it on a hidden virtual display — not a floating window, not split-screen, not picture-in-picture, not a mirror of this screen. The app keeps rendering and playing audio as if it were in front of you. You use something else on the real screen.",
-        ),
-        Page(
-            Icons.Outlined.TouchApp,
-            "Control it from here",
-            "The only control path is the Accessibility service you enable in Settings. Remote Control maps your gestures to the hidden app and can type into fields the app exposes. If this device cannot target the virtual display, GhostDisplay says so and switches to view-only — it will not fail silently.",
+            "The hidden window is not a floating bubble, not split-screen, not picture-in-picture, not a mirror of this screen. The app keeps rendering and playing audio as if it were in front of you. You use something else on the real screen.",
         ),
         Page(
             Icons.Outlined.WarningAmber,
             "Hidden is not isolated",
-            "A virtual display hides the picture, not the system. The hidden app can still use the network, send notifications, and change settings. Finance apps warn before start. You will see that warning before the first launch.",
+            "A virtual display hides the picture, not the system. The hidden app can still use the network, send notifications, and change settings. Finance apps warn before start. Enable Accessibility on the next screens so hold-on-home works; without it, hold the app in this list instead — GhostDisplay will say so, not fail silently.",
         ),
     )
     val pager = rememberPagerState(pageCount = { pages.size })
@@ -79,7 +79,7 @@ fun OnboardingScreen(onFinished: () -> Unit) {
     ) {
         Spacer(Modifier.height(24.dp))
         Text("GhostDisplay", style = MaterialTheme.typography.headlineLarge, color = GhostMint)
-        Text("Run any app on a screen that isn’t there.", color = GhostMuted)
+        Text("Hold an app to run it on a screen that isn’t there.", color = GhostMuted)
         Spacer(Modifier.height(32.dp))
         HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { index ->
             val p = pages[index]

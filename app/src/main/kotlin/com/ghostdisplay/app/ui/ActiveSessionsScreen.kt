@@ -74,7 +74,7 @@ fun ActiveSessionsScreen(
             }
         }
         if (sessions.isEmpty() && browserTabs.isEmpty()) {
-            Text("No sessions. Open Browsers, tap Run hidden on Chrome, then open tabs in the Viewer.", color = GhostMuted)
+            Text("No sessions. Hold an app on the home screen or in the app list, then choose Run hidden.", color = GhostMuted)
         } else if (sessions.isNotEmpty()) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(sessions, key = { it.id }) { session ->

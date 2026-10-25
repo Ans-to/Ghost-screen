@@ -83,9 +83,8 @@ fun SetupScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Setup", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "One-time grants. GhostDisplay never asks for root, Shizuku, ADB, or a second app.",
+            "One-time grants. After this you start and stop by holding an app. GhostDisplay never asks for root, Shizuku, ADB, or a second app.",
             color = GhostMuted,
         )
         items.forEach { item ->

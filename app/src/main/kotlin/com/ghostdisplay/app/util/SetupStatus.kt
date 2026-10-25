@@ -33,7 +33,7 @@ object SetupStatus {
             ChecklistItem(
                 id = "accessibility",
                 title = "Accessibility (control)",
-                body = "The only control path. Enable “GhostDisplay control” in the system Accessibility settings. Without it, hidden apps are view-only.",
+                body = "Enable “GhostDisplay control”. This is how hold-an-app on the home screen shows Run hidden / Stop, and the only control path inside a hidden window. Without it, hold apps in the GhostDisplay list instead; hidden apps are view-only.",
                 required = false,
                 granted = isAccessibilityEnabled(context),
                 actionLabel = "Open Accessibility settings",

@@ -426,6 +426,82 @@ class CompatibilityDetectorTests(unittest.TestCase):
         self.assertEqual(compat, "SUPPORTED")
 
 
+# --- Home-screen hold resolver (mirrors LauncherHoldResolver.kt) ---
+
+LAUNCHER_CHROME = {
+    "home", "search", "google", "voice search", "app search",
+    "notifications", "uninstall", "widgets", "app info", "edit",
+    "remove", "resize",
+}
+
+
+def resolve_hold(event_pkg, label, homes, apps, self_pkg="com.ghostdisplay.app.debug", class_name=None):
+    if not event_pkg or event_pkg == self_pkg or event_pkg not in homes:
+        return None
+    if class_name and ("widget" in class_name.lower() or "searchbox" in class_name.lower()):
+        return None
+    raw = (label or "").strip()
+    if not raw:
+        return None
+    low = raw.lower()
+    if low == "folder" or low.startswith("folder:") or low.startswith("folder "):
+        return None
+    if low in LAUNCHER_CHROME or low.endswith(" page") or low.startswith("page "):
+        return None
+
+    def unique(name):
+        hits = [a for a in apps if a["label"].lower() == name.lower() or a["pkg"].lower() == name.lower()]
+        return hits[0]["pkg"] if len(hits) == 1 else None
+
+    hit = unique(raw)
+    if hit:
+        return hit
+    cleaned = raw.split(",")[0].split("·")[0].strip()
+    if cleaned and cleaned != raw:
+        return unique(cleaned)
+    return None
+
+
+class LauncherHoldResolverTests(unittest.TestCase):
+    HOMES = {"com.google.android.apps.nexuslauncher", "com.android.launcher3"}
+    APPS = [
+        {"pkg": "com.android.chrome", "label": "Chrome"},
+        {"pkg": "org.mozilla.firefox", "label": "Firefox"},
+        {"pkg": "com.whatsapp", "label": "WhatsApp"},
+    ]
+
+    def test_home_hold_resolves_chrome(self):
+        self.assertEqual(
+            resolve_hold("com.google.android.apps.nexuslauncher", "Chrome", self.HOMES, self.APPS),
+            "com.android.chrome",
+        )
+
+    def test_hold_again_resolves_same_app_for_stop(self):
+        self.assertEqual(
+            resolve_hold("com.android.launcher3", "WhatsApp", self.HOMES, self.APPS),
+            "com.whatsapp",
+        )
+
+    def test_ignores_ghostdisplay_and_other_apps(self):
+        self.assertIsNone(resolve_hold("com.ghostdisplay.app.debug", "Chrome", self.HOMES | {"com.ghostdisplay.app.debug"}, self.APPS))
+        self.assertIsNone(resolve_hold("com.whatsapp", "Chrome", self.HOMES, self.APPS))
+
+    def test_ignores_folders_widgets_chrome(self):
+        self.assertIsNone(resolve_hold("com.android.launcher3", "Folder: Social", self.HOMES, self.APPS))
+        self.assertIsNone(resolve_hold("com.android.launcher3", "Chrome", self.HOMES, self.APPS, class_name="android.appwidget.AppWidgetHostView"))
+        self.assertIsNone(resolve_hold("com.android.launcher3", "Search", self.HOMES, self.APPS))
+
+    def test_notification_suffix(self):
+        self.assertEqual(
+            resolve_hold("com.android.launcher3", "Chrome, 3 notifications", self.HOMES, self.APPS),
+            "com.android.chrome",
+        )
+
+    def test_ambiguous_does_not_guess(self):
+        twins = [{"pkg": "com.a.chrome", "label": "Chrome"}, {"pkg": "com.b.chrome", "label": "Chrome"}]
+        self.assertIsNone(resolve_hold("com.android.launcher3", "Chrome", self.HOMES, twins))
+
+
 # --- Source / release contracts ---
 
 BANNED_UI = re.compile(
@@ -476,6 +552,51 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("GhostService", manifest)
         self.assertNotIn("rikka.shizuku", manifest.lower())
         self.assertNotIn("moe.shizuku", manifest.lower())
+        self.assertIn("ui.HoldActionActivity", manifest)
+        self.assertIn("Theme.GhostDisplay.Hold", manifest)
+
+    def test_hold_on_home_is_accessibility_not_overlay(self):
+        a11y = open(
+            os.path.join(ROOT, "app", "src", "main", "res", "xml", "accessibility_service_config.xml"),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("typeViewLongClicked", a11y)
+        hold = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "HoldActionActivity.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("windowIsTranslucent", open(
+            os.path.join(ROOT, "app", "src", "main", "res", "values", "themes.xml"),
+            encoding="utf-8",
+        ).read())
+        self.assertNotIn("TYPE_APPLICATION_OVERLAY", hold)
+        self.assertNotIn("SYSTEM_ALERT_WINDOW", hold)
+        self.assertIn("Hold an app", open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "OnboardingScreen.kt",
+            ),
+            encoding="utf-8",
+        ).read())
 
     def test_room_v3_migration_present(self):
         db = open(
