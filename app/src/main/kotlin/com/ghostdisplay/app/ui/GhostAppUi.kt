@@ -145,6 +145,7 @@ private fun MainShell(vm: GhostViewModel) {
                         sessions = sessions,
                         onShowActions = { actionRow = it },
                         onOpenViewer = gate.openViewer,
+                        onStop = gate.stop,
                         onOpenSessions = { dest = Dest.Sessions },
                         onOpenSetup = { dest = Dest.Setup },
                     )

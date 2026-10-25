@@ -44,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +78,7 @@ fun HomeScreen(
     sessions: List<GhostSession>,
     onShowActions: (PickerRow) -> Unit,
     onOpenViewer: (GhostSession) -> Unit,
+    onStop: (GhostSession) -> Unit,
     onOpenSessions: () -> Unit,
     onOpenSetup: () -> Unit,
 ) {
@@ -89,6 +91,10 @@ fun HomeScreen(
     val notifOn = SetupStatus.hasNotifications(context)
 
     var filterValue by remember { mutableStateOf(HomeFilter.All) }
+    var selectedIds by remember { mutableStateOf(emptySet<String>()) }
+    val tabStyle = filterValue == HomeFilter.Browsers || filterValue == HomeFilter.Hidden
+    val selecting = selectedIds.isNotEmpty()
+    LaunchedEffect(filterValue) { selectedIds = emptySet() }
 
     val filtered = remember(rows, query, filterValue, liveByPackage) {
         val q = query.trim().lowercase()
@@ -110,14 +116,22 @@ fun HomeScreen(
 
     fun hapticHold(row: PickerRow) {
         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        onShowActions(row)
+        if (tabStyle) {
+            val id = row.app.packageName
+            selectedIds = if (selecting) {
+                if (id in selectedIds) selectedIds - id else selectedIds + id
+            } else setOf(id)
+        } else {
+            onShowActions(row)
+        }
     }
 
+    Column(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 84.dp),
-        modifier = Modifier.fillMaxSize(),
+        columns = if (tabStyle) GridCells.Fixed(2) else GridCells.Adaptive(minSize = 84.dp),
+        modifier = Modifier.weight(1f),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 40.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -125,7 +139,11 @@ fun HomeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("GhostDisplay", style = MaterialTheme.typography.headlineMedium, color = GhostMint)
-                        Text("Hold an app to run it hidden", color = GhostMuted)
+                        Text(
+                            if (tabStyle) "Hold a tab to select it"
+                            else "Hold an app to run it hidden",
+                            color = GhostMuted,
+                        )
                     }
                     IconButton(onClick = onOpenSessions) {
                         Icon(Icons.Outlined.Layers, contentDescription = "Active sessions")
@@ -148,7 +166,7 @@ fun HomeScreen(
                     onValueChange = onQuery,
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    placeholder = { Text("Search apps") },
+                    placeholder = { Text(if (tabStyle) "Search tabs" else "Search apps") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                 )
@@ -195,7 +213,8 @@ fun HomeScreen(
                     Icon(Icons.Outlined.TouchApp, contentDescription = null, tint = GhostMuted, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (a11yOn) "Hold any app here — or on your home screen — for Run hidden / Stop."
+                        if (tabStyle) "Hold a tab for options, then tap more to select. Tap a tab to open it."
+                        else if (a11yOn) "Hold any app here — or on your home screen — for Run hidden / Stop."
                         else "Hold any app here for Run hidden / Stop. Enable Accessibility in Setup to do the same on the home screen.",
                         color = GhostMuted,
                         style = MaterialTheme.typography.bodyMedium,
@@ -215,16 +234,74 @@ fun HomeScreen(
             }
         }
         items(filtered, key = { it.app.packageName }) { row ->
-            AppGridCell(
-                row = row,
-                live = liveByPackage[row.app.packageName],
-                onClick = {
-                    val live = liveByPackage[row.app.packageName]
-                    if (live != null) onOpenViewer(live) else onShowActions(row)
-                },
-                onLongClick = { hapticHold(row) },
-            )
+            val live = liveByPackage[row.app.packageName]
+            val id = row.app.packageName
+            if (tabStyle) {
+                TabCard(
+                    card = SwitcherCard(
+                        id = id,
+                        title = row.app.label,
+                        subtitle = if (live != null) "Running hidden · ${live.tier}" else row.app.packageName,
+                        live = live != null,
+                        icon = row.icon,
+                    ),
+                    selected = id in selectedIds,
+                    selecting = selecting,
+                    onOpen = {
+                        when {
+                            selecting -> {
+                                selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+                            }
+                            live != null -> onOpenViewer(live)
+                            else -> onShowActions(row)
+                        }
+                    },
+                    onLongPress = { hapticHold(row) },
+                    onClose = live?.let { session ->
+                        {
+                            onStop(session)
+                        }
+                    },
+                )
+            } else {
+                AppGridCell(
+                    row = row,
+                    live = live,
+                    onClick = {
+                        if (live != null) onOpenViewer(live) else onShowActions(row)
+                    },
+                    onLongClick = { hapticHold(row) },
+                )
+            }
         }
+    }
+    if (selecting) {
+        val selectedRows = filtered.filter { it.app.packageName in selectedIds }
+        val liveSelected = selectedRows.mapNotNull { liveByPackage[it.app.packageName] }
+        TabSelectBar(
+            count = selectedIds.size,
+            onDone = { selectedIds = emptySet() },
+            onOpen = liveSelected.singleOrNull()?.let { session ->
+                {
+                    selectedIds = emptySet()
+                    onOpenViewer(session)
+                }
+            },
+            onCloseSelected = if (liveSelected.isNotEmpty()) {
+                {
+                    liveSelected.forEach(onStop)
+                    selectedIds = emptySet()
+                }
+            } else if (selectedRows.size == 1) {
+                {
+                    val row = selectedRows.first()
+                    selectedIds = emptySet()
+                    onShowActions(row)
+                }
+            } else null,
+            closeLabel = if (liveSelected.isNotEmpty()) "Stop hidden" else "Run hidden",
+        )
+    }
     }
 }
 

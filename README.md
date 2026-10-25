@@ -87,7 +87,7 @@ GhostDisplay does **not** replace Chrome with an in-app WebView. It launches the
 
 1. Open GhostDisplay **once**. Finish onboarding. Enable **Accessibility** (so hold-on-home works) and notifications.
 2. Leave GhostDisplay. On the home screen, **hold Chrome** (or any app). Tap **Run hidden**. Grant MediaProjection when asked (needed for a capture-capable display and audio routing).
-3. Hold the same app again to **Stop hidden**, or **Open viewer**. In the real Chrome window, open **at least 10 tabs**.
+3. Hold the same app again to **Stop hidden**, or **Open viewer**. In the viewer, tap **Tabs** (or Chrome’s tab button), then **hold a tab to select it** — same grid as Chrome. Open **at least 10 tabs**.
 4. Close the Viewer, use another app, lock the phone. The hidden Chrome process stays on the virtual display (foreground service + `PARTIAL_WAKE_LOCK`). Closing Viewer does not stop Chrome.
 5. You do not need to reopen GhostDisplay to start or stop. If hold-on-home does nothing (some launchers never fire the event), open GhostDisplay and hold the app in the grid instead — it will not fail silently.
 6. Your home-screen Chrome icon still opens a second window of the same real app on the main display — GhostDisplay never fights that icon.
