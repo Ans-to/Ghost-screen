@@ -16,7 +16,16 @@ GhostDisplay does **not** record or exfiltrate frames. The optional debug previe
 
 ---
 
-## Install and run
+## Download the APK
+
+There is no APK attached to this chat. After GitHub Actions finishes a build, download it here:
+
+1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.2.0-debug.apk`
+2. **Actions artifact** (every PR / push): [github.com/Ans-to/Ghost-screen/actions](https://github.com/Ans-to/Ghost-screen/actions) → latest **Build APK** run → Artifacts → **GhostDisplay-apk** (zip; unzip the APK)
+
+Install on an Android 10+ phone: allow unknown sources / “Install unknown apps” for your browser or Files, then open the APK. Debug id is `com.ghostdisplay.app.debug`.
+
+To build the same APK yourself:
 
 ### Requirements
 
