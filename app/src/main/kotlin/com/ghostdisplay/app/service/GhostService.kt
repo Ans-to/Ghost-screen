@@ -238,11 +238,13 @@ class GhostService : Service() {
 
         var audioOk = false
         var audioNotice: String? = null
-        if (config.audioEnabled) {
+        if (config.audioEnabled && launchResult is AppLauncher.LaunchResult.Launched) {
             val audioResult = audio.start(mp)
             audioOk = audioResult.started
             audioNotice = audioResult.notice
             if (audioOk) audioBoundSession = sessionId
+        } else if (config.audioEnabled) {
+            audioNotice = "Audio routing was not started because the app did not launch on the hidden display."
         }
 
         val flagsRequested = VirtualDisplayFlags.attempts(config.secure).first().name
@@ -265,8 +267,8 @@ class GhostService : Service() {
                 audioRequested = config.audioEnabled,
                 secureRequested = config.secure,
                 knownLimit = CompatibilityProbe.caveatFor(category),
-                extraNotices = listOfNotNull(audioNotice) + probe.notices +
-                    (if (launchResult is AppLauncher.LaunchResult.Failed) launchResult.errors else emptyList()),
+                extraNotices = (if (launchResult is AppLauncher.LaunchResult.Failed) launchResult.errors else emptyList()) +
+                    probe.notices + listOfNotNull(audioNotice),
             ),
         )
         val after = CompatibilityProbe.afterLaunch(
@@ -548,7 +550,10 @@ class GhostService : Service() {
         db.profiles().upsert(
             existing.copy(
                 compatibility = report.compatibility.name,
-                lastError = report.notices.firstOrNull(),
+                lastError = report.notices.firstOrNull { notice ->
+                    notice.contains("Step ") || notice.contains("Permission Denial") ||
+                        notice.contains("will not place") || notice.contains("blocked")
+                } ?: report.notices.firstOrNull { !it.contains("Audio") },
                 lastNoticesJson = gson.toJson(report.notices),
                 updatedAt = System.currentTimeMillis(),
             ),

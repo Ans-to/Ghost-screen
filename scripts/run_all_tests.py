@@ -646,8 +646,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.2"', gradle)
-        self.assertIn("versionCode = 5", gradle)
+        self.assertIn('versionName = "1.3.3"', gradle)
+        self.assertIn("versionCode = 6", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,10 +673,10 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.2-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.2", wf)
+        self.assertIn("GhostDisplay-1.3.3-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.3", wf)
 
-    def test_hidden_launch_runs_from_resumed_activity(self):
+    def test_hidden_launch_uses_display_context_and_trampoline(self):
         launcher = open(
             os.path.join(
                 ROOT,
@@ -692,11 +692,12 @@ class SourceContractTests(unittest.TestCase):
             ),
             encoding="utf-8",
         ).read()
-        self.assertIn("ForegroundLaunchHost.requireResumed()", launcher)
+        self.assertIn("createDisplayContext", launcher)
+        self.assertIn("createWindowContext", launcher)
+        self.assertIn("DisplayTrampolineActivity", launcher)
         self.assertNotIn("context.startActivity", launcher)
-        self.assertIn("openedOnDefaultDisplay = false", launcher)
-        self.assertNotIn("openedOnDefaultDisplay = true", launcher)
-        hold = open(
+        self.assertIn("LaunchResult.Failed(3, errors, false)", launcher)
+        trampoline = open(
             os.path.join(
                 ROOT,
                 "app",
@@ -706,13 +707,14 @@ class SourceContractTests(unittest.TestCase):
                 "com",
                 "ghostdisplay",
                 "app",
-                "ui",
-                "HoldActionActivity.kt",
+                "launch",
+                "DisplayTrampolineActivity.kt",
             ),
             encoding="utf-8",
         ).read()
-        self.assertIn("ForegroundLaunchHost.onResume", hold)
-        main = open(
+        self.assertIn("DEFAULT_DISPLAY", trampoline)
+        self.assertNotIn("finishAndRemoveTask", trampoline)
+        audio = open(
             os.path.join(
                 ROOT,
                 "app",
@@ -722,11 +724,13 @@ class SourceContractTests(unittest.TestCase):
                 "com",
                 "ghostdisplay",
                 "app",
-                "MainActivity.kt",
+                "audio",
+                "AudioRouter.kt",
             ),
             encoding="utf-8",
         ).read()
-        self.assertIn("ForegroundLaunchHost.onResume", main)
+        self.assertNotIn("sampleRate / 2", audio)
+        self.assertIn("alignedAudioBufferBytes", audio)
 
     def test_hold_chooser_is_not_modal_bottom_sheet(self):
         sheet = open(

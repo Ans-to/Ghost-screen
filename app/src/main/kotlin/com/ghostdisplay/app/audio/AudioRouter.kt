@@ -62,7 +62,9 @@ class AudioRouter {
         if (minIn <= 0 || minOut <= 0) {
             return StartResult(false, "This device rejected the audio capture format.")
         }
-        val buffer = maxOf(minIn, minOut, sampleRate / 2)
+        // AudioTrack rejects sizes that are not a multiple of the frame
+        // (stereo 16-bit = 4 bytes). sampleRate/2 is 22050, which is not.
+        val buffer = alignedAudioBufferBytes(minIn, minOut, bytesPerFrame = 4)
 
         val captureConfig = try {
             AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
