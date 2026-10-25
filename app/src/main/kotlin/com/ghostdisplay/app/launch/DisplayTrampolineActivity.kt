@@ -4,7 +4,10 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
+import android.hardware.display.DisplayManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Display
 
@@ -15,16 +18,26 @@ import android.view.Display
  * HyperOS rejects startActivity of *another* package with launchDisplayId.
  * This activity starts the target with a plain startActivity so the target
  * inherits this window's display. If we are still on the phone screen we
- * wait for [onMovedToDisplay] and never start the target there.
+ * wait until this window is moved and never start the target there.
  */
 class DisplayTrampolineActivity : Activity() {
 
     private var startedTarget = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            maybeStart("onDisplayChanged:$displayId")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        displayManager().registerDisplayListener(displayListener, mainHandler)
         maybeStart("onCreate")
         window.decorView.post { maybeStart("post") }
+        pollUntilStarted()
         window.decorView.postDelayed({
             if (!startedTarget && !isFinishing) {
                 val session = TrampolineSession.current
@@ -49,9 +62,24 @@ class DisplayTrampolineActivity : Activity() {
         maybeStart("onResume")
     }
 
-    override fun onMovedToDisplay(displayId: Int, config: Configuration) {
-        super.onMovedToDisplay(displayId, config)
-        maybeStart("onMovedToDisplay:$displayId")
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        maybeStart("onConfigurationChanged")
+    }
+
+    override fun onDestroy() {
+        displayManager().unregisterDisplayListener(displayListener)
+        super.onDestroy()
+    }
+
+    private fun displayManager(): DisplayManager =
+        getSystemService(DISPLAY_SERVICE) as DisplayManager
+
+    private fun pollUntilStarted() {
+        maybeStart("poll")
+        if (!startedTarget && !isFinishing) {
+            mainHandler.postDelayed({ pollUntilStarted() }, POLL_MS)
+        }
     }
 
     private fun displayId(): Int {
@@ -114,5 +142,6 @@ class DisplayTrampolineActivity : Activity() {
     companion object {
         private const val TAG = "GhostTrampoline"
         private const val SELF_TIMEOUT_MS = 6_000L
+        private const val POLL_MS = 100L
     }
 }
