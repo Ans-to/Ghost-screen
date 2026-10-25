@@ -20,7 +20,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -28,6 +31,9 @@ jobs:
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.7
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
@@ -46,13 +52,17 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.2.0
           name: GhostDisplay 1.2.0
+          body: |
+            Sideload this debug APK on Android 10+.
+            Package id: `com.ghostdisplay.app.debug`
+            Allow “Install unknown apps” for your browser or Files, then open the APK.
           files: dist/GhostDisplay-1.2.0-debug.apk
           generate_release_notes: true
           fail_on_unmatched_files: true
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
