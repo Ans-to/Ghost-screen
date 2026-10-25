@@ -17,13 +17,13 @@ class AppCatalog(private val packageManager: PackageManager) {
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val resolved = query(intent)
         return resolved.mapNotNull { info ->
-            val ai = info.activityInfo ?: return@mapNotNull null
+            val ai: ActivityInfo = info.activityInfo ?: return@mapNotNull null
             if (ai.packageName == selfPackage) return@mapNotNull null
             LaunchableApp(
                 packageName = ai.packageName,
                 activityName = ai.name,
                 label = info.loadLabel(packageManager)?.toString() ?: ai.packageName,
-                requestedOrientation = ai.requestedOrientation,
+                requestedOrientation = orientationOf(ai),
                 resizeable = isResizeable(ai),
             )
         }.distinctBy { it.packageName }
@@ -36,14 +36,22 @@ class AppCatalog(private val packageManager: PackageManager) {
     fun requestedOrientation(packageName: String, activityName: String?): Int {
         return try {
             if (activityName != null) {
-                val info = packageManager.getActivityInfo(
+                val info: ActivityInfo = packageManager.getActivityInfo(
                     android.content.ComponentName(packageName, activityName),
                     0,
                 )
-                info.requestedOrientation
+                orientationOf(info)
             } else {
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
+        } catch (_: Exception) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    private fun orientationOf(info: ActivityInfo): Int {
+        return try {
+            ActivityInfo::class.java.getField("requestedOrientation").getInt(info)
         } catch (_: Exception) {
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }

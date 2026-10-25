@@ -149,12 +149,12 @@ class PersistentWebViewHost(
 
     override fun setLiteMode(id: String, lite: Boolean) {
         val wv = webViews[id] ?: return
-        records[id] = records[id]?.copy(liteMode = lite)
+        records[id]?.let { records[id] = it.copy(liteMode = lite) }
         applyLite(wv, lite)
     }
 
     override fun setKeepVisibleShim(id: String, enabled: Boolean) {
-        records[id] = records[id]?.copy(keepVisibleShim = enabled)
+        records[id]?.let { records[id] = it.copy(keepVisibleShim = enabled) }
         if (enabled) webViews[id]?.evaluateJavascript(VisibilityShimInjector.SCRIPT, null)
     }
 
