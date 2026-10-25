@@ -2,6 +2,7 @@ package com.ghostdisplay.app.ocr
 
 import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -28,9 +29,9 @@ class MlKitOcrFallback : OcrFallback {
         val image = InputImage.fromBitmap(bitmap, 0)
         val needle = query.trim().lowercase()
         if (needle.isEmpty()) return null
-        val text = suspendCancellableCoroutine { cont ->
+        val text = suspendCancellableCoroutine<Text?> { cont ->
             recognizer.process(image)
-                .addOnSuccessListener { cont.resume(it) }
+                .addOnSuccessListener { result -> cont.resume(result) }
                 .addOnFailureListener { cont.resume(null) }
         } ?: return null
         val block = text.textBlocks.firstOrNull { it.text.lowercase().contains(needle) }
