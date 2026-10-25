@@ -646,8 +646,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.1"', gradle)
-        self.assertIn("versionCode = 4", gradle)
+        self.assertIn('versionName = "1.3.2"', gradle)
+        self.assertIn("versionCode = 5", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,8 +673,60 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.1-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.1", wf)
+        self.assertIn("GhostDisplay-1.3.2-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.2", wf)
+
+    def test_hidden_launch_runs_from_resumed_activity(self):
+        launcher = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "launch",
+                "AppLauncher.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("ForegroundLaunchHost.requireResumed()", launcher)
+        self.assertNotIn("context.startActivity", launcher)
+        self.assertIn("openedOnDefaultDisplay = false", launcher)
+        self.assertNotIn("openedOnDefaultDisplay = true", launcher)
+        hold = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "ui",
+                "HoldActionActivity.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("ForegroundLaunchHost.onResume", hold)
+        main = open(
+            os.path.join(
+                ROOT,
+                "app",
+                "src",
+                "main",
+                "kotlin",
+                "com",
+                "ghostdisplay",
+                "app",
+                "MainActivity.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("ForegroundLaunchHost.onResume", main)
 
     def test_hold_chooser_is_not_modal_bottom_sheet(self):
         sheet = open(

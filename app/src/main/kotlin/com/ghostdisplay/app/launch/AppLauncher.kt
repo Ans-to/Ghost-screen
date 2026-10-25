@@ -10,19 +10,17 @@ import android.util.Log
 import android.view.Display
 
 /**
- * Launches a target app onto a virtual display using the three-step fallback
- * ladder required by the architecture:
+ * Launches a target app onto a virtual display.
  *
- *  1. Direct [ActivityOptions.setLaunchDisplayId].
- *  2. Launch normally, then [ActivityManager.moveTaskToDisplay] (hidden API,
- *     attempted via reflection; typically blocked for third-party apps).
- *  3. Report a clear per-app "not supported on this device" result. Never a
- *     silent failure.
+ * The startActivity call MUST run on a resumed Activity. Starting it from
+ * [com.ghostdisplay.app.service.GhostService] is the Permission Denial in
+ * Active sessions (“starting Intent … from ProcessRecord”).
  *
- * Verification of the resulting task's displayId is done by the caller using
- * Accessibility windows (this class cannot see other apps' task ids on
- * modern Android). [LaunchResult.Launched] therefore means "the system
- * accepted the startActivity call"; [verifiedOnDisplay] is filled in later.
+ *  1. Explicit component + [ActivityOptions.setLaunchDisplayId] from the
+ *     resumed GhostDisplay screen.
+ *  2. Package launch intent, still with setLaunchDisplayId — never onto
+ *     the phone screen.
+ *  3. Report unsupported. Never a silent failure, never a leak onto display 0.
  */
 class AppLauncher(
     private val context: Context,
@@ -49,83 +47,54 @@ class AppLauncher(
     ): LaunchResult {
         val errors = mutableListOf<String>()
 
-        val step1 = launchOnDisplay(packageName, activityName, virtualDisplayId)
+        val step1 = launchOnDisplay(explicitIntent(packageName, activityName), virtualDisplayId)
         if (step1.isSuccess) {
-            val taskId = step1.getOrNull()
             return LaunchResult.Launched(
                 step = 1,
                 displayId = virtualDisplayId,
-                taskId = taskId,
+                taskId = step1.getOrNull(),
                 notes = listOf(
-                    "startActivity accepted with setLaunchDisplayId($virtualDisplayId).",
-                    "Confirm with Accessibility that the task actually landed on the virtual display — some OEMs ignore the display id and still open on the phone screen.",
+                    "startActivity accepted with setLaunchDisplayId($virtualDisplayId) from the visible GhostDisplay screen.",
                 ),
             )
         }
         errors += "Step 1 (setLaunchDisplayId): ${step1.exceptionOrNull()?.message}"
 
-        val step2 = launchThenMove(packageName, activityName, virtualDisplayId, errors)
-        if (step2 != null) return step2
+        val pkgIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+        if (pkgIntent != null) {
+            pkgIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+            val step2 = launchOnDisplay(pkgIntent, virtualDisplayId)
+            if (step2.isSuccess) {
+                return LaunchResult.Launched(
+                    step = 2,
+                    displayId = virtualDisplayId,
+                    taskId = step2.getOrNull(),
+                    notes = listOf(
+                        "Package launch intent accepted with setLaunchDisplayId($virtualDisplayId).",
+                    ),
+                )
+            }
+            errors += "Step 2 (package launch intent on hidden display): ${step2.exceptionOrNull()?.message}"
+        } else {
+            errors += "Step 2: no launcher intent for $packageName."
+        }
 
-        errors += "Step 3: this device/app combination cannot place the task on a virtual display from a non-privileged app."
+        errors += "Step 3: this device will not place the task on a virtual display from GhostDisplay. The app was not opened on the phone screen."
         return LaunchResult.Failed(
             lastStep = 3,
             errors = errors,
-            openedOnDefaultDisplay = true,
+            openedOnDefaultDisplay = false,
         )
     }
 
-    private fun launchOnDisplay(
-        packageName: String,
-        activityName: String,
-        displayId: Int,
-    ): Result<Int?> {
+    private fun launchOnDisplay(intent: Intent, displayId: Int): Result<Int?> {
         return runCatching {
-            val intent = launchIntent(packageName, activityName)
+            val host = ForegroundLaunchHost.requireResumed()
             val options = ActivityOptions.makeBasic()
             options.launchDisplayId = displayId
             applyCallerDisplayId(options, displayId)
-            context.startActivity(intent, options.toBundle())
-            peekTaskId(packageName)
-        }
-    }
-
-    private fun launchThenMove(
-        packageName: String,
-        activityName: String,
-        displayId: Int,
-        errors: MutableList<String>,
-    ): LaunchResult? {
-        val launched = runCatching {
-            context.startActivity(launchIntent(packageName, activityName))
-        }
-        if (launched.isFailure) {
-            errors += "Step 2 launch: ${launched.exceptionOrNull()?.message}"
-            return null
-        }
-
-        val taskId = peekTaskId(packageName)
-        if (taskId == null) {
-            errors += "Step 2: Android no longer exposes other apps' task ids to third-party apps, so moveTaskToDisplay cannot be aimed. " +
-                "The app may have opened on the physical screen."
-            return LaunchResult.Failed(
-                lastStep = 2,
-                errors = errors.toList() + "Could not obtain a task id to move.",
-                openedOnDefaultDisplay = true,
-            )
-        }
-
-        val moved = moveTaskToDisplay(taskId, displayId)
-        return if (moved.isSuccess) {
-            LaunchResult.Launched(
-                step = 2,
-                displayId = displayId,
-                taskId = taskId,
-                notes = listOf("Launched on default display then moved task $taskId → display $displayId."),
-            )
-        } else {
-            errors += "Step 2 moveTaskToDisplay($taskId, $displayId): ${moved.exceptionOrNull()?.message}"
-            null
+            host.startActivity(intent, options.toBundle())
+            peekTaskId(intent.component?.packageName ?: intent.`package`.orEmpty())
         }
     }
 
@@ -154,6 +123,7 @@ class AppLauncher(
      * expected case and is not treated as a crash.
      */
     fun peekTaskId(packageName: String): Int? {
+        if (packageName.isBlank()) return null
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         try {
             @Suppress("DEPRECATION")
@@ -176,8 +146,8 @@ class AppLauncher(
         return null
     }
 
-    private fun launchIntent(packageName: String, activityName: String): Intent {
-        val intent = Intent(Intent.ACTION_MAIN).apply {
+    private fun explicitIntent(packageName: String, activityName: String): Intent {
+        return Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = ComponentName(packageName, activityName)
             addFlags(
@@ -186,11 +156,9 @@ class AppLauncher(
                     Intent.FLAG_ACTIVITY_NEW_DOCUMENT,
             )
         }
-        return intent
     }
 
     private fun applyCallerDisplayId(options: ActivityOptions, displayId: Int) {
-        // Hidden ActivityOptions.setCallerDisplayId(int) on some versions.
         runCatching {
             val m = ActivityOptions::class.java.methods.firstOrNull {
                 it.name == "setCallerDisplayId" && it.parameterTypes.size == 1

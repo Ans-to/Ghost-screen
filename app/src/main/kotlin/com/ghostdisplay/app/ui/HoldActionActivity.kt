@@ -11,17 +11,21 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import com.ghostdisplay.app.data.LaunchableApp
 import com.ghostdisplay.app.data.SessionStatus
+import com.ghostdisplay.app.launch.ForegroundLaunchHost
 import com.ghostdisplay.app.ui.theme.GhostTheme
 import kotlinx.coroutines.launch
 
 /**
  * Translucent activity shown after a home-screen long-press.
- * Not a floating window and not a draw-over-apps overlay — a real activity
- * the user dismisses like a chooser.
+ * Must stay resumed until [AppLauncher] starts the target — Android will
+ * not let GhostService open another app onto the hidden display.
  */
 class HoldActionActivity : ComponentActivity() {
 
@@ -36,6 +40,16 @@ class HoldActionActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         render(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ForegroundLaunchHost.onResume(this)
+    }
+
+    override fun onStop() {
+        ForegroundLaunchHost.onPause(this)
+        super.onStop()
     }
 
     private fun render(intent: Intent) {
@@ -62,19 +76,35 @@ class HoldActionActivity : ComponentActivity() {
                     it.packageName == pkg && it.status == SessionStatus.RUNNING
                 }
                 val scope = rememberCoroutineScope()
+                var awaiting by remember { mutableStateOf(false) }
+                var awaitFrom by remember { mutableLongStateOf(0L) }
                 LaunchedEffect(pkg) { vm.refreshApps() }
-                LaunchGate(vm, onLaunched = {
+                LaunchedEffect(sessions, awaiting, pkg) {
+                    if (!awaiting) return@LaunchedEffect
+                    val hit = sessions.firstOrNull {
+                        it.packageName == pkg && it.startedAt >= awaitFrom
+                    } ?: return@LaunchedEffect
+                    awaiting = false
+                    val msg = if (hit.status == SessionStatus.RUNNING) {
+                        "${app.label} is running hidden"
+                    } else {
+                        hit.capability.notices.firstOrNull()
+                            ?: "Hidden window did not start on this device"
+                    }
                     Toast.makeText(
                         this@HoldActionActivity,
-                        "${app.label} is running hidden",
-                        Toast.LENGTH_SHORT,
+                        msg,
+                        if (hit.status == SessionStatus.RUNNING) Toast.LENGTH_SHORT else Toast.LENGTH_LONG,
                     ).show()
                     finish()
-                }) { gate ->
+                }
+                LaunchGate(vm) { gate ->
                     AppActionSheet(
                         target = AppActionTarget(app, catalogRow?.icon, live),
-                        onDismiss = { finish() },
+                        onDismiss = { if (!awaiting) finish() },
                         onRunHidden = { target ->
+                            awaitFrom = System.currentTimeMillis()
+                            awaiting = true
                             scope.launch {
                                 val p = vm.profileOf(target.packageName)
                                 gate.requestLaunch(target, p)
