@@ -5,8 +5,8 @@
     <!--
         GhostDisplay is a standalone app. The only user actions required after
         install are: runtime permission grants, enabling the built-in
-        Accessibility service, and (when needed) the standard MediaProjection
-        consent dialog. No Shizuku, root, ADB, or companion app.
+        Accessibility service, the standard MediaProjection consent dialog,
+        and (on HyperOS / Android 15) Shizuku so hidden windows can start.
     -->
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -40,6 +40,7 @@
         <intent>
             <action android:name="android.settings.ACCESSIBILITY_SETTINGS" />
         </intent>
+        <package android:name="moe.shizuku.privileged.api" />
     </queries>
 
     <application
@@ -174,5 +175,13 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

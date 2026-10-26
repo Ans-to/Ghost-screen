@@ -1,16 +1,15 @@
 # GhostDisplay
 
-GhostDisplay **1.3.10** — a standalone native Android app that runs **your real Chrome** (or Firefox, or any installed browser) on a hidden `VirtualDisplay`. Same app, same tabs, same account. Open **at least 10 tabs** in the Viewer; the display stays live with a wake lock so the browser is not backgrounded the way it is when you leave it for the home screen.
+GhostDisplay **1.4.0** — a standalone native Android app that runs **your real Chrome** (or Firefox, or any installed browser) on a hidden `VirtualDisplay`. Same app, same tabs, same account. Open **at least 10 tabs** in the Viewer; the display stays live with a wake lock so the browser is not backgrounded the way it is when you leave it for the home screen.
 
 It can also launch any other installed app the same way (no floating window, split-screen, PiP, or mirroring). There is no in-app WebView “replacement browser” in the main UI.
 
-**No Shizuku. No root. No ADB. No companion app. No secondary service to install.**
-
-The only user actions after installing the APK are:
+**HyperOS / Android 15:** hidden windows need **Shizuku** (no root). Pair once, keep it running, grant GhostDisplay. Other user actions:
 
 1. Normal runtime permission grants (notifications, microphone for audio routing)
 2. One built-in Settings toggle for **Accessibility**
 3. The standard **MediaProjection** (screen-capture) consent dialog, when a session needs it
+4. **Shizuku** Start + Grant (Setup has the step-by-step guide)
 
 GhostDisplay does **not** record or exfiltrate frames. The optional debug preview is shown only when you open it.
 
@@ -20,7 +19,7 @@ GhostDisplay does **not** record or exfiltrate frames. The optional debug previe
 
 There is no APK attached to this chat. After GitHub Actions finishes a build, download it here:
 
-1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.3.10-debug.apk`
+1. **GitHub Releases** (after merge to `main`): [github.com/Ans-to/Ghost-screen/releases](https://github.com/Ans-to/Ghost-screen/releases) — grab `GhostDisplay-1.4.0-debug.apk`
 2. **Actions artifact** (every PR / push): [github.com/Ans-to/Ghost-screen/actions](https://github.com/Ans-to/Ghost-screen/actions) → latest **Build APK** run → Artifacts → **GhostDisplay-apk** (zip; unzip the APK)
 
 Install on an Android 10+ phone: allow unknown sources / “Install unknown apps” for your browser or Files, then open the APK. Debug id is `com.ghostdisplay.app.debug`.
@@ -56,7 +55,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 The debug application id is `com.ghostdisplay.app.debug`. The release id is `com.ghostdisplay.app`.
 
-There is no extra binary, Magisk module, Shizuku service, or `adb shell` step.
+Shizuku is a separate app you install once. GhostDisplay talks to it; there is no Magisk module and no extra `adb shell` after pairing.
 
 ---
 
@@ -74,8 +73,19 @@ GhostDisplay asks for nothing beyond what Android already exposes to ordinary ap
 | **Notification listener** | Settings → Notification access | Optional | Drops shade notifications from a hidden app when that app’s toggle is on |
 | **Usage access** (`PACKAGE_USAGE_STATS`) | Setup → Usage access | Optional, overlay only | Lets the 8dp return-indicator dot know which real app is in the foreground |
 | **Draw over other apps** (`SYSTEM_ALERT_WINDOW`) | Setup → overlay permission, then the overlay toggle | Optional, **off by default** | 8dp draggable return-indicator dot — not a floating app window |
+| **Shizuku** | Setup → Grant Shizuku (after Shizuku is running) | Required on HyperOS | Shell identity so the real app can start on the hidden display |
 
-Not requested, not used: root, Shizuku, `WRITE_SECURE_SETTINGS`, `DUMP`, `INJECT_EVENTS`, ADB. Overlay is opt-in only.
+Not requested: root, `WRITE_SECURE_SETTINGS`, `DUMP`, `INJECT_EVENTS`. Overlay is opt-in only. Shizuku is required on HyperOS so the real app can start on the hidden display.
+
+### Shizuku, step by step
+
+1. Install **Shizuku** from Play Store or [GitHub](https://github.com/RikkaApps/Shizuku/releases).
+2. Open Shizuku. Pair with **Wireless debugging**: Developer options → Wireless debugging → Pair with pairing code → type that code in Shizuku. Pair once.
+3. In Shizuku tap **Start**. After a reboot, tap Start again (pairing stays).
+4. Open GhostDisplay → Setup → **Grant Shizuku**. Accept the prompt.
+5. Hold an app → Run hidden. Keep Shizuku running while the hidden window is live.
+
+Use Shizuku in ADB/wireless mode, not root mode.
 
 ---
 
@@ -85,7 +95,7 @@ GhostDisplay does **not** replace Chrome with an in-app WebView. It launches the
 
 ### How to use
 
-1. Open GhostDisplay **once**. Finish onboarding. Enable **Accessibility** (so hold-on-home works) and notifications.
+1. Open GhostDisplay **once**. Finish onboarding. In **Setup**, finish Shizuku (see below), enable **Accessibility** (so hold-on-home works) and notifications.
 2. Leave GhostDisplay. On the home screen, **hold Chrome** (or any app). Tap **Run hidden**. Grant MediaProjection when asked (needed for a capture-capable display and audio routing).
 3. Hold the same app again to **Stop hidden**, or **Open viewer**. In the viewer, tap **Tabs** (or Chrome’s tab button), then **hold a tab to select it** — same grid as Chrome. Open **at least 10 tabs**.
 4. Close the Viewer, use another app, lock the phone. The hidden Chrome process stays on the virtual display (foreground service + `PARTIAL_WAKE_LOCK`). Closing Viewer does not stop Chrome.
@@ -100,7 +110,7 @@ GhostDisplay does not inject into Chrome’s tab manager. The mechanism is: Chro
 - [ ] In Viewer, open 10 tabs. Close Viewer, use another app: Chrome stays running hidden.
 - [ ] Play media in a Chrome tab, turn the screen off: audio continues when MediaProjection + audio capture were granted.
 - [ ] Stop on the session card fully releases the virtual display.
-- [ ] Still no Shizuku / root / ADB / companion app.
+- [ ] Shizuku is running and granted; no root.
 
 ```
 ./gradlew :app:testDebugUnitTest
@@ -210,7 +220,7 @@ Return indicator:
 
 Use a physical device. Grant Accessibility + battery exemption before the launch tests.
 
-- [ ] **Install APK only.** No Shizuku, no root, no `adb shell`, no second app.
+- [ ] **Install APK + Shizuku.** Pair Shizuku once (Wireless debugging), tap Start, grant GhostDisplay. No root.
 - [ ] **Chrome hidden.** Tap Run hidden on Chrome. The physical screen does **not** show Chrome. You can open another app and use it normally. Session card says Running hidden (or Limited/Unsupported with a reason).
 - [ ] **Video / streaming audio, screen off.** Profile: MediaProjection + audio on. Launch a player, start playback via Remote Control or before hiding, turn the screen off. Audio continues on speaker / Bluetooth. Mute toggle on the session card silences the router.
 - [ ] **Landscape game.** A game with `requestedOrientation=landscape` gets a landscape virtual display (`width > height` on the session card).

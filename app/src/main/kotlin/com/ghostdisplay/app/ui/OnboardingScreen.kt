@@ -51,7 +51,12 @@ fun OnboardingScreen(onFinished: () -> Unit) {
         Page(
             Icons.Outlined.TouchApp,
             "Hold an app. That’s it.",
-            "Open GhostDisplay once. After setup, leave it. On your home screen, hold Chrome, WhatsApp, or any app — Run hidden appears. Hold it again to stop. You do not come back here to start or stop a hidden window.",
+            "Open GhostDisplay once. Finish Setup (Shizuku + Accessibility). After that, leave it. On your home screen, hold Chrome, WhatsApp, or any app — Run hidden appears. Hold it again to stop. You do not come back here to start or stop a hidden window.",
+        ),
+        Page(
+            Icons.Outlined.WarningAmber,
+            "Shizuku is required here",
+            "HyperOS will not let GhostDisplay start another app on a hidden display by itself. Shizuku gives GhostDisplay a shell identity that Android does allow. Pair Shizuku once (you may already have), tap Start, then Grant Shizuku in Setup. No root. After a reboot, only Start is needed again.",
         ),
         Page(
             Icons.Outlined.Language,

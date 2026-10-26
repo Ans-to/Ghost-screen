@@ -26,11 +26,13 @@ import kotlinx.coroutines.delay
  * context: a Presentation already shown on the virtual display is
  * associated with it; the phone activity is not.
  *
- * When launchDisplayId is refused, AOSP still allows:
- *  1. Starting **without** that option (the launchDisplayId gate is skipped).
- *  2. Reparenting a task we already own onto the display.
- * The target is never started until the starter’s displayId is the hidden
- * one, so it inherits that display and is never opened on display 0.
+ * HyperOS / Android 15 refuses launchDisplayId for an ordinary app uid.
+ * Shizuku’s shell uid holds INTERNAL_SYSTEM_WINDOW, so `am start --display`
+ * from that identity is the AOSP-legal path on this device.
+ *
+ * When Shizuku is not ready, we still try our own starter without
+ * launchDisplayId and reparent that task. The target is never started
+ * until a starter is on the hidden display.
  */
 class AppLauncher(
     private val context: Context,
@@ -59,13 +61,32 @@ class AppLauncher(
     ): LaunchResult {
         val errors = mutableListOf<String>()
         val notes = mutableListOf<String>()
+        val display = displayOf(context, virtualDisplayId)
+            ?: return LaunchResult.Failed(0, listOf("Virtual display $virtualDisplayId is gone."), false)
+
+        if (ShizukuStatus.isReady(context)) {
+            val shizuku = ShizukuAppStarter.startOnDisplay(
+                context, packageName, activityName, virtualDisplayId,
+            )
+            if (shizuku.isSuccess) {
+                return launched(
+                    0,
+                    virtualDisplayId,
+                    null,
+                    listOf(shizuku.getOrNull().orEmpty()),
+                    "Shizuku shell on hidden display",
+                )
+            }
+            errors += "Shizuku launch: ${shizuku.exceptionOrNull()?.message}"
+        } else {
+            notes += ShizukuStatus.notReadyMessage(context)
+        }
+
         val host = try {
             ForegroundLaunchHost.requireResumed()
         } catch (t: Throwable) {
-            return LaunchResult.Failed(0, listOf(t.message ?: "No visible GhostDisplay screen."), false)
+            return LaunchResult.Failed(0, errors + notes + (t.message ?: "No visible GhostDisplay screen."), false)
         }
-        val display = displayOf(host, virtualDisplayId)
-            ?: return LaunchResult.Failed(0, listOf("Virtual display $virtualDisplayId is gone."), false)
 
         occupy(host, display)
         delay(300)
@@ -202,8 +223,8 @@ class AppLauncher(
         }
     }
 
-    private fun displayOf(host: Activity, displayId: Int): Display? {
-        val dm = host.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    private fun displayOf(from: Context, displayId: Int): Display? {
+        val dm = from.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         return dm.getDisplay(displayId)
     }
 

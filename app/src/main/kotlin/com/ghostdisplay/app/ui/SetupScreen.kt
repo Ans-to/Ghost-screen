@@ -41,6 +41,8 @@ import androidx.compose.material3.OutlinedTextField
 import com.ghostdisplay.app.GhostApp
 import com.ghostdisplay.app.data.BlockedApp
 import com.ghostdisplay.app.launch.KnownLimits
+import com.ghostdisplay.app.launch.ShizukuPhase
+import com.ghostdisplay.app.launch.ShizukuStatus
 import com.ghostdisplay.app.ui.theme.GhostMint
 import com.ghostdisplay.app.ui.theme.GhostMuted
 import com.ghostdisplay.app.ui.theme.GhostWarn
@@ -84,9 +86,23 @@ fun SetupScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "One-time grants. After this you start and stop by holding an app. GhostDisplay never asks for root, Shizuku, ADB, or a second app.",
+            "One-time grants. After this you start and stop by holding an app. Hidden windows on HyperOS need Shizuku (no root). Pairing is done in Shizuku; GhostDisplay only needs the grant below.",
             color = GhostMuted,
         )
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Shizuku, step by step", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "1. Install Shizuku from Play Store or GitHub (RikkaApps/Shizuku).\n" +
+                        "2. Open Shizuku. Use Wireless debugging pairing (Developer options → Wireless debugging → Pair with pairing code). Enter that code in Shizuku. You only pair once.\n" +
+                        "3. In Shizuku tap Start. The Shizuku notification must say it is running. After a reboot, tap Start again — pairing stays.\n" +
+                        "4. Come back here and tap Grant Shizuku. Accept the Shizuku prompt for GhostDisplay.\n" +
+                        "5. Hold an app on the home screen → Run hidden. Grant screen-capture when asked.\n\n" +
+                        "Use Shizuku in ADB/wireless mode, not root mode. Keep Shizuku running while a hidden window is live.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
         items.forEach { item ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -109,6 +125,12 @@ fun SetupScreen() {
                     if (!item.granted && item.id != "mediaprojection") {
                         Button(onClick = {
                             when (item.id) {
+                                "shizuku" -> {
+                                    when (ShizukuStatus.phase(context)) {
+                                        ShizukuPhase.NEED_PERMISSION -> ShizukuStatus.requestPermission()
+                                        else -> ShizukuStatus.openShizukuOrStore(context)
+                                    }
+                                }
                                 "accessibility" -> activity.startActivity(SetupStatus.accessibilitySettingsIntent())
                                 "battery" -> activity.startActivity(SetupStatus.batteryIntent(context))
                                 "notifications" -> {

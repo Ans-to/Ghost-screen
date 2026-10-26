@@ -569,8 +569,8 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("session.AppViewerActivity", manifest)
         self.assertIn("indicator.OverlayDotService", manifest)
         self.assertIn("GhostService", manifest)
-        self.assertNotIn("rikka.shizuku", manifest.lower())
-        self.assertNotIn("moe.shizuku", manifest.lower())
+        self.assertIn("rikka.shizuku.ShizukuProvider", manifest)
+        self.assertIn("moe.shizuku.privileged.api", manifest)
         self.assertIn("ui.HoldActionActivity", manifest)
         self.assertIn("Theme.GhostDisplay.Hold", manifest)
 
@@ -648,8 +648,11 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.10"', gradle)
-        self.assertIn("versionCode = 13", gradle)
+        self.assertIn('versionName = "1.4.0"', gradle)
+        self.assertIn("versionCode = 14", gradle)
+        self.assertIn("aidl = true", gradle)
+        self.assertIn("dev.rikka.shizuku:api:13.1.5", gradle)
+        self.assertIn("dev.rikka.shizuku:provider:13.1.5", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -675,8 +678,8 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.10-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.10", wf)
+        self.assertIn("GhostDisplay-1.4.0-debug.apk", wf)
+        self.assertIn("tag_name: v1.4.0", wf)
 
     def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
         launcher = open(
@@ -701,6 +704,25 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("ActivityOptions.makeBasic()", launcher)
         self.assertIn("HiddenTaskMover", launcher)
         self.assertIn("occupancy?.context", launcher)
+        self.assertIn("ShizukuAppStarter", launcher)
+        self.assertIn("ShizukuStatus", launcher)
+        aidl = os.path.join(
+            ROOT, "app", "src", "main", "aidl", "com", "ghostdisplay", "app", "shell", "IGhostShell.aidl",
+        )
+        self.assertTrue(os.path.isfile(aidl), "IGhostShell.aidl")
+        shell = open(
+            os.path.join(
+                ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "shell", "GhostShellService.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("am start --user 0 --display", shell)
+        setup = open(
+            os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "ui", "SetupScreen.kt"),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("Shizuku, step by step", setup)
+        self.assertIn("Wireless debugging", setup)
         self.assertIn("ForegroundLaunchHost.pin", open(
             os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "ui", "LaunchGate.kt"),
             encoding="utf-8",
@@ -915,7 +937,8 @@ class UserFlowScenarioTests(unittest.TestCase):
         readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
         self.assertIn("RESURRECTED", readme)
         self.assertIn("8dp", readme)
-        self.assertIn("No Shizuku", readme)
+        self.assertIn("Shizuku", readme)
+        self.assertIn("Wireless debugging", readme)
 
 
 if __name__ == "__main__":
