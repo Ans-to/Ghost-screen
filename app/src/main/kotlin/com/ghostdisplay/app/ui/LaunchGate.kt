@@ -22,6 +22,7 @@ import com.ghostdisplay.app.data.AppProfile
 import com.ghostdisplay.app.data.GhostSession
 import com.ghostdisplay.app.data.LaunchableApp
 import com.ghostdisplay.app.data.SessionStatus
+import com.ghostdisplay.app.launch.ForegroundLaunchHost
 import com.ghostdisplay.app.launch.HiddenLaunch
 import com.ghostdisplay.app.profile.AppCategory
 import com.ghostdisplay.app.profile.AppCategoryClassifier
@@ -66,12 +67,17 @@ fun LaunchGate(
     var explainerApp by remember { mutableStateOf<Pair<LaunchableApp, AppProfile?>?>(null) }
     var explainerDone by remember { mutableStateOf(false) }
 
+    fun pinHost() {
+        (context as? Activity)?.let { ForegroundLaunchHost.pin(it) }
+    }
+
     val mpLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         val pending = pendingLaunch
         pendingLaunch = null
         if (pending == null) return@rememberLauncherForActivityResult
+        pinHost()
         val hardNeed = HiddenLaunch.hardNeedsMediaProjection(pending.profile)
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             HiddenLaunch.start(
@@ -106,6 +112,7 @@ fun LaunchGate(
     }
 
     fun startNow(app: LaunchableApp, profile: AppProfile?, additional: Boolean, financeConfirmed: Boolean) {
+        pinHost()
         if (HiddenLaunch.needsMediaProjection(profile) && !MediaProjectionHolder.hasConsent()) {
             pendingLaunch = PendingStart(app, profile, additional, financeConfirmed)
             val mgr = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager

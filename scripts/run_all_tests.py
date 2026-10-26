@@ -648,8 +648,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.9"', gradle)
-        self.assertIn("versionCode = 12", gradle)
+        self.assertIn('versionName = "1.3.10"', gradle)
+        self.assertIn("versionCode = 13", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -675,8 +675,8 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.9-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.9", wf)
+        self.assertIn("GhostDisplay-1.3.10-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.10", wf)
 
     def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
         launcher = open(
@@ -701,6 +701,16 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("ActivityOptions.makeBasic()", launcher)
         self.assertIn("HiddenTaskMover", launcher)
         self.assertIn("occupancy?.context", launcher)
+        self.assertIn("ForegroundLaunchHost.pin", open(
+            os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "ui", "LaunchGate.kt"),
+            encoding="utf-8",
+        ).read())
+        host = open(
+            os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "launch", "ForegroundLaunchHost.kt"),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("fun pin(", host)
+        self.assertIn("if (pinned.get() === activity) return", host)
         self.assertNotIn("makeTaskLaunchBehind", launcher)
         self.assertNotIn("startOwnActivityOnDisplay", launcher)
         self.assertNotIn("createWindowContext", launcher)

@@ -141,6 +141,7 @@ class AppLauncher(
             if (TrampolineSession.current === session) {
                 TrampolineSession.current = null
             }
+            ForegroundLaunchHost.unpin()
             releaseOccupancy()
         }
     }
