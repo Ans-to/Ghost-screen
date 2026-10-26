@@ -10,15 +10,18 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Display
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * GhostDisplay activity that must already be on the virtual display before
- * it starts the target.
+ * it starts the target, and must **stay** there as the source record.
  *
- * HyperOS rejects startActivity of *another* package with launchDisplayId.
- * This activity starts the target with a plain startActivity so the target
- * inherits this window's display. If we are still on the phone screen we
- * wait until this window is moved and never start the target there.
+ * App-owned virtual displays only accept launchDisplayId for activities with
+ * android:allowEmbedded. Other packages (Chrome included) do not have that
+ * flag, so they cannot be started with launchDisplayId. They inherit this
+ * window's display from a plain startActivity. Finishing this activity before
+ * the target is placed drops that inheritance and HyperOS puts the target
+ * on the phone — or never starts it.
  */
 class DisplayTrampolineActivity : Activity() {
 
@@ -34,6 +37,7 @@ class DisplayTrampolineActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        live.add(this)
         displayManager().registerDisplayListener(displayListener, mainHandler)
         maybeStart("onCreate")
         window.decorView.post { maybeStart("post") }
@@ -68,6 +72,7 @@ class DisplayTrampolineActivity : Activity() {
     }
 
     override fun onDestroy() {
+        live.remove(this)
         displayManager().unregisterDisplayListener(displayListener)
         super.onDestroy()
     }
@@ -97,7 +102,6 @@ class DisplayTrampolineActivity : Activity() {
     private fun maybeStart(where: String) {
         val session = TrampolineSession.current
         if (session == null) {
-            if (!isFinishing) finish()
             return
         }
         val id = displayId()
@@ -109,19 +113,17 @@ class DisplayTrampolineActivity : Activity() {
         val error = startTarget(session.packageName, session.activityName)
         if (error != null) {
             session.fail(error)
+            finish()
         } else {
             session.succeed(id, taskId)
         }
-        window.decorView.post { finish() }
     }
 
     private fun startTarget(pkg: String, activityName: String): String? {
         val launch = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = ComponentName(pkg, activityName)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
-                Intent.FLAG_ACTIVITY_NEW_DOCUMENT
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
         }
         try {
             startActivity(launch)
@@ -143,5 +145,14 @@ class DisplayTrampolineActivity : Activity() {
         private const val TAG = "GhostTrampoline"
         private const val SELF_TIMEOUT_MS = 6_000L
         private const val POLL_MS = 100L
+        private val live = CopyOnWriteArraySet<DisplayTrampolineActivity>()
+
+        fun finishLiving() {
+            live.toList().forEach { activity ->
+                if (!activity.isFinishing && !activity.isDestroyed) {
+                    activity.finish()
+                }
+            }
+        }
     }
 }
