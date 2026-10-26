@@ -58,27 +58,27 @@ jobs:
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/GhostDisplay-1.3.6-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/GhostDisplay-1.3.7-debug.apk
           ls -lh dist
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: GhostDisplay-apk
-          path: dist/GhostDisplay-1.3.6-debug.apk
+          path: dist/GhostDisplay-1.3.7-debug.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.6
-          name: GhostDisplay 1.3.6
+          tag_name: v1.3.7
+          name: GhostDisplay 1.3.7
           body: |
             Sideload this debug APK on Android 10+.
             Package id: `com.ghostdisplay.app.debug`
 
-            App-owned virtual displays only accept launchDisplayId for activities with android:allowEmbedded. GhostDisplay’s starter did not set that, so it never landed on the hidden display and Chrome never inherited it. 1.3.6 marks the starter allowEmbedded, keeps it alive on the virtual display as the source record, and starts the target with no launchDisplayId.
-          files: dist/GhostDisplay-1.3.6-debug.apk
+            HyperOS was covering the launch screen and then blocking the start. 1.3.7 starts GhostDisplay’s own starter behind the hold screen with launchDisplayId, relaunches that task onto the hidden display, and starts the target from that window without launchDisplayId and without NEW_TASK first so it inherits the hidden display.
+          files: dist/GhostDisplay-1.3.7-debug.apk
           generate_release_notes: true
           fail_on_unmatched_files: true
           make_latest: true

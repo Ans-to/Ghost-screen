@@ -10,6 +10,7 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.util.Log
 import android.view.Display
+import kotlinx.coroutines.delay
 
 /**
  * Places a target app on a virtual display.
@@ -58,6 +59,7 @@ class AppLauncher(
             ?: return LaunchResult.Failed(0, listOf("Virtual display $virtualDisplayId is gone."), false)
 
         occupy(host, display)
+        delay(250)
 
         val session = TrampolineSession(packageName, activityName, virtualDisplayId)
         TrampolineSession.current = session
@@ -101,6 +103,28 @@ class AppLauncher(
             if (taskId == null) {
                 errors += "GhostDisplay starter never produced a task to move onto the hidden display. $packageName was not started. The app was not opened on the phone screen."
                 return LaunchResult.Failed(2, errors, false)
+            }
+
+            val relaunched = HiddenTaskMover.relaunchOnDisplay(context, taskId, optionsFor(virtualDisplayId).toBundle())
+            if (relaunched.isSuccess) {
+                when (val outcome = session.awaitFinished(SECOND_WAIT_MS)) {
+                    is TrampolineSession.Outcome.Ok -> {
+                        return launched(
+                            2,
+                            outcome.displayId,
+                            outcome.taskId,
+                            "relaunch from recents via ${relaunched.getOrNull()}",
+                        )
+                    }
+                    is TrampolineSession.Outcome.Err -> {
+                        errors += "Step 2 after ${relaunched.getOrNull()}: ${outcome.message}"
+                    }
+                    null -> {
+                        errors += "Step 2 after ${relaunched.getOrNull()}: starter still on display ${session.lastDisplayId}"
+                    }
+                }
+            } else {
+                errors += "Step 2 (startActivityFromRecents): ${relaunched.exceptionOrNull()?.message}"
             }
 
             val moved = HiddenTaskMover.moveTaskToDisplay(context, taskId, virtualDisplayId)
@@ -173,7 +197,9 @@ class AppLauncher(
     }
 
     private fun optionsFor(displayId: Int): ActivityOptions {
-        val options = ActivityOptions.makeBasic()
+        // Launch-behind so if HyperOS ignores launchDisplayId the starter
+        // does not cover HoldActionActivity (background-start would then block).
+        val options = ActivityOptions.makeTaskLaunchBehind()
         options.launchDisplayId = displayId
         applyCallerDisplayId(options, displayId)
         applyFullscreenWindowing(options)

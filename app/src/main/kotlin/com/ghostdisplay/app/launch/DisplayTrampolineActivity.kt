@@ -120,23 +120,30 @@ class DisplayTrampolineActivity : Activity() {
     }
 
     private fun startTarget(pkg: String, activityName: String): String? {
-        val launch = Intent(Intent.ACTION_MAIN).apply {
+        val sameTask = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = ComponentName(pkg, activityName)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
         }
         try {
-            startActivity(launch)
+            startActivity(sameTask)
             return null
         } catch (first: Throwable) {
-            val fallback = packageManager.getLaunchIntentForPackage(pkg)
-                ?: return "Could not start $pkg: ${first.message}"
-            fallback.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
-            return try {
-                startActivity(fallback)
-                null
+            val newTask = Intent(sameTask).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+            }
+            try {
+                startActivity(newTask)
+                return null
             } catch (second: Throwable) {
-                "Could not start $pkg: ${second.message}"
+                val fallback = packageManager.getLaunchIntentForPackage(pkg)
+                    ?: return "Could not start $pkg: ${second.message}"
+                fallback.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+                return try {
+                    startActivity(fallback)
+                    null
+                } catch (third: Throwable) {
+                    "Could not start $pkg: ${third.message}"
+                }
             }
         }
     }

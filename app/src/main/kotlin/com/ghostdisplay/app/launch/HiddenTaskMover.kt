@@ -14,6 +14,24 @@ import java.lang.reflect.InvocationTargetException
  */
 object HiddenTaskMover {
 
+    fun relaunchOnDisplay(context: Context, taskId: Int, options: android.os.Bundle): Result<String> {
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val method = am.javaClass.methods.firstOrNull {
+                it.name == "startActivityFromRecents" && it.parameterTypes.size == 2
+            } ?: ActivityManager::class.java.methods.firstOrNull {
+                it.name == "startActivityFromRecents" && it.parameterTypes.size == 2
+            } ?: return Result.failure(
+                IllegalStateException("startActivityFromRecents is not on this device"),
+            )
+            method.isAccessible = true
+            method.invoke(am, taskId, options)
+            Result.success("ActivityManager.startActivityFromRecents")
+        } catch (t: Throwable) {
+            Result.failure(IllegalStateException(unwrap("startActivityFromRecents", t)))
+        }
+    }
+
     fun moveTaskToDisplay(context: Context, taskId: Int, displayId: Int): Result<String> {
         val attempts = listOf(
             tryAmMove(context, taskId, displayId),
