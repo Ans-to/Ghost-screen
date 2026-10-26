@@ -6,9 +6,10 @@ package com.ghostdisplay.app.shell
  * virtual display that GhostDisplay’s own uid cannot target with
  * launchDisplayId.
  */
-class GhostShellService : IGhostShell.Stub() {
+class GhostShellService : IGhostShell.Stub {
 
     constructor() : super()
+
     @Suppress("unused")
     constructor(context: android.content.Context) : super()
 
