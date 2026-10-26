@@ -13,8 +13,8 @@ android {
         applicationId = "com.ghostdisplay.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.3.7"
+        versionCode = 11
+        versionName = "1.3.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }

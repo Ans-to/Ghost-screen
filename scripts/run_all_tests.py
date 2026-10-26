@@ -648,8 +648,8 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.7"', gradle)
-        self.assertIn("versionCode = 10", gradle)
+        self.assertIn('versionName = "1.3.8"', gradle)
+        self.assertIn("versionCode = 11", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -675,8 +675,8 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.7-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.7", wf)
+        self.assertIn("GhostDisplay-1.3.8-debug.apk", wf)
+        self.assertIn("tag_name: v1.3.8", wf)
 
     def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
         launcher = open(
@@ -696,10 +696,10 @@ class SourceContractTests(unittest.TestCase):
         ).read()
         self.assertIn("DisplayTrampolineActivity", launcher)
         self.assertIn("TrampolineSession", launcher)
-        self.assertIn("HiddenTaskMover", launcher)
         self.assertIn("host.startActivity(trampoline", launcher)
-        self.assertIn("makeTaskLaunchBehind", launcher)
-        self.assertIn("relaunchOnDisplay", launcher)
+        self.assertIn("isActivityStartAllowedOnDisplay", launcher)
+        self.assertIn("ActivityOptions.makeBasic()", launcher)
+        self.assertNotIn("makeTaskLaunchBehind", launcher)
         self.assertNotIn("startOwnActivityOnDisplay", launcher)
         self.assertNotIn("createWindowContext", launcher)
         self.assertNotIn("createDisplayContext", launcher)

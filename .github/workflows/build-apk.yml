@@ -58,27 +58,27 @@ jobs:
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/GhostDisplay-1.3.7-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/GhostDisplay-1.3.8-debug.apk
           ls -lh dist
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: GhostDisplay-apk
-          path: dist/GhostDisplay-1.3.7-debug.apk
+          path: dist/GhostDisplay-1.3.8-debug.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.7
-          name: GhostDisplay 1.3.7
+          tag_name: v1.3.8
+          name: GhostDisplay 1.3.8
           body: |
             Sideload this debug APK on Android 10+.
             Package id: `com.ghostdisplay.app.debug`
 
-            HyperOS was covering the launch screen and then blocking the start. 1.3.7 starts GhostDisplay’s own starter behind the hold screen with launchDisplayId, relaunches that task onto the hidden display, and starts the target from that window without launchDisplayId and without NEW_TASK first so it inherits the hidden display.
-          files: dist/GhostDisplay-1.3.7-debug.apk
+            Follows AOSP multi-display launch policy: only GhostDisplay’s own starter uses launchDisplayId on the virtual display we own. The target is started from that activity with no launchDisplayId so it inherits the hidden display. Android 10 forbids launching other packages onto an app-created virtual display with launchDisplayId (the HyperOS “with launchDisplayId: N” denial).
+          files: dist/GhostDisplay-1.3.8-debug.apk
           generate_release_notes: true
           fail_on_unmatched_files: true
           make_latest: true

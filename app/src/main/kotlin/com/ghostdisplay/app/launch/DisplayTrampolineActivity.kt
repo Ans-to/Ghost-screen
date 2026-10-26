@@ -16,12 +16,11 @@ import java.util.concurrent.CopyOnWriteArraySet
  * GhostDisplay activity that must already be on the virtual display before
  * it starts the target, and must **stay** there as the source record.
  *
- * App-owned virtual displays only accept launchDisplayId for activities with
- * android:allowEmbedded. Other packages (Chrome included) do not have that
- * flag, so they cannot be started with launchDisplayId. They inherit this
- * window's display from a plain startActivity. Finishing this activity before
- * the target is placed drops that inheritance and HyperOS puts the target
- * on the phone — or never starts it.
+ * AOSP: an unprivileged app may put its own activity on a virtual display
+ * it created. Other packages cannot be started with launchDisplayId
+ * (isCallerAllowedToLaunchOnDisplay). They inherit this window's display
+ * from a plain startActivity with no launch options.
+ * Finishing this activity before the target is placed drops that inheritance.
  */
 class DisplayTrampolineActivity : Activity() {
 
@@ -107,7 +106,7 @@ class DisplayTrampolineActivity : Activity() {
         val id = displayId()
         session.noteLanded(id, taskId)
         Log.i(TAG, "$where display=$id expected=${session.expectedDisplayId} task=$taskId")
-        if (id == Display.DEFAULT_DISPLAY) return
+        if (id != session.expectedDisplayId) return
         if (startedTarget) return
         startedTarget = true
         val error = startTarget(session.packageName, session.activityName)
