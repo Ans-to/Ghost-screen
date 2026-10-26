@@ -47,6 +47,11 @@ class HoldActionActivity : ComponentActivity() {
         ForegroundLaunchHost.onResume(this)
     }
 
+    override fun onResume() {
+        super.onResume()
+        ForegroundLaunchHost.onResume(this)
+    }
+
     override fun onStop() {
         ForegroundLaunchHost.onPause(this)
         super.onStop()

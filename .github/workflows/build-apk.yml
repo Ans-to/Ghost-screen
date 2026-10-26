@@ -58,28 +58,27 @@ jobs:
       - name: Stage APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/GhostDisplay-1.3.4-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/GhostDisplay-1.4.0-debug.apk
           ls -lh dist
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: GhostDisplay-apk
-          path: dist/GhostDisplay-1.3.4-debug.apk
+          path: dist/GhostDisplay-1.4.0-debug.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.4
-          name: GhostDisplay 1.3.4
+          tag_name: v1.4.0
+          name: GhostDisplay 1.4.0
           body: |
             Sideload this debug APK on Android 10+.
             Package id: `com.ghostdisplay.app.debug`
 
-            HyperOS was denying startActivity of Chrome with launchDisplayId on a MediaProjection display.
-            The hidden display is now app-owned (DisplayManager). Chrome is started from GhostDisplay’s own activity already on that display, with no launchDisplayId on Chrome.
-          files: dist/GhostDisplay-1.3.4-debug.apk
+            HyperOS blocks an ordinary app from starting another app on a hidden display. 1.4.0 uses Shizuku (shell identity) to start the real app on that display. Pair Shizuku once, tap Start, then Grant Shizuku in GhostDisplay Setup. No root.
+          files: dist/GhostDisplay-1.4.0-debug.apk
           generate_release_notes: true
           fail_on_unmatched_files: true
           make_latest: true

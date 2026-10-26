@@ -14,6 +14,8 @@ import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.ghostdisplay.app.control.GhostAccessibilityService
+import com.ghostdisplay.app.launch.ShizukuPhase
+import com.ghostdisplay.app.launch.ShizukuStatus
 import com.ghostdisplay.app.safety.GhostNotificationListenerService
 import com.ghostdisplay.app.service.MediaProjectionHolder
 
@@ -29,7 +31,21 @@ data class ChecklistItem(
 object SetupStatus {
 
     fun items(context: Context): List<ChecklistItem> {
+        val shizuku = ShizukuStatus.phase(context)
         return listOf(
+            ChecklistItem(
+                id = "shizuku",
+                title = "Shizuku (hidden windows)",
+                body = "HyperOS blocks an ordinary app from starting another app on a hidden display. Shizuku’s shell identity is allowed to. Pair once, keep Shizuku running, then grant GhostDisplay. No root.",
+                required = true,
+                granted = shizuku == ShizukuPhase.READY,
+                actionLabel = when (shizuku) {
+                    ShizukuPhase.NOT_INSTALLED -> "Install / open Shizuku"
+                    ShizukuPhase.NOT_RUNNING -> "Open Shizuku and tap Start"
+                    ShizukuPhase.NEED_PERMISSION -> "Grant Shizuku"
+                    ShizukuPhase.READY -> "On"
+                },
+            ),
             ChecklistItem(
                 id = "accessibility",
                 title = "Accessibility (control)",

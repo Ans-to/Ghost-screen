@@ -3,23 +3,36 @@ package com.ghostdisplay.app.launch
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityOptions
+import android.app.Presentation
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.util.Log
 import android.view.Display
-import android.view.WindowManager
+import kotlinx.coroutines.delay
 
 /**
- * Places a target app on a virtual display.
+ * Places a target app on a virtual display using the AOSP multi-display
+ * launch policy (Android 10+):
  *
- * Xiaomi denies startActivity of a *foreign* package with launchDisplayId
- * (the “with launchDisplayId: N” Permission Denial). We only ever send
- * launchDisplayId for our own [DisplayTrampolineActivity]. That activity
- * is already on the hidden display and starts the target with no display id.
+ * https://source.android.com/docs/core/display/multi_display/activity-launch
  *
- * Never start the target on display 0.
+ * SafeActivityOptions throws “with launchDisplayId: N” **only** when that
+ * option is set and isCallerAllowedToLaunchOnDisplay is false. HyperOS
+ * 1.3.8 returned isActivityStartAllowedOnDisplay=false when the source
+ * context was the phone activity. AOSP keys that check on the source
+ * context: a Presentation already shown on the virtual display is
+ * associated with it; the phone activity is not.
+ *
+ * HyperOS / Android 15 refuses launchDisplayId for an ordinary app uid.
+ * Shizuku’s shell uid holds INTERNAL_SYSTEM_WINDOW, so `am start --display`
+ * from that identity is the AOSP-legal path on this device.
+ *
+ * When Shizuku is not ready, we still try our own starter without
+ * launchDisplayId and reparent that task. The target is never started
+ * until a starter is on the hidden display.
  */
 class AppLauncher(
     private val context: Context,
@@ -39,114 +52,218 @@ class AppLauncher(
         ) : LaunchResult()
     }
 
-    fun launch(
+    private var occupancy: Presentation? = null
+
+    suspend fun launch(
         packageName: String,
         activityName: String,
         virtualDisplayId: Int,
     ): LaunchResult {
         val errors = mutableListOf<String>()
+        val notes = mutableListOf<String>()
+        val display = displayOf(context, virtualDisplayId)
+            ?: return LaunchResult.Failed(0, listOf("Virtual display $virtualDisplayId is gone."), false)
+
+        if (ShizukuStatus.isReady(context)) {
+            val shizuku = ShizukuAppStarter.startOnDisplay(
+                context, packageName, activityName, virtualDisplayId,
+            )
+            if (shizuku.isSuccess) {
+                return launched(
+                    0,
+                    virtualDisplayId,
+                    null,
+                    listOf(shizuku.getOrNull().orEmpty()),
+                    "Shizuku shell on hidden display",
+                )
+            }
+            errors += "Shizuku launch: ${shizuku.exceptionOrNull()?.message}"
+        } else {
+            notes += ShizukuStatus.notReadyMessage(context)
+        }
+
         val host = try {
             ForegroundLaunchHost.requireResumed()
         } catch (t: Throwable) {
-            return LaunchResult.Failed(0, listOf(t.message ?: "No visible GhostDisplay screen."), false)
+            return LaunchResult.Failed(0, errors + notes + (t.message ?: "No visible GhostDisplay screen."), false)
         }
-        val display = displayOf(host, virtualDisplayId)
-            ?: return LaunchResult.Failed(0, listOf("Virtual display $virtualDisplayId is gone."), false)
 
+        occupy(host, display)
+        delay(300)
+
+        val session = TrampolineSession(packageName, activityName, virtualDisplayId)
+        TrampolineSession.current = session
         val trampoline = Intent(host, DisplayTrampolineActivity::class.java).apply {
-            putExtra(DisplayTrampolineActivity.EXTRA_PACKAGE, packageName)
-            putExtra(DisplayTrampolineActivity.EXTRA_ACTIVITY, activityName)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
         }
+        val displayContext = occupancy?.context
+        try {
+            val fromDisplay = isStartAllowed(displayContext ?: host, virtualDisplayId, trampoline)
+            val fromPhone = isStartAllowed(host, virtualDisplayId, trampoline)
+            notes += "isActivityStartAllowedOnDisplay display-context=$fromDisplay phone-context=$fromPhone " +
+                "flags=${displayFlags(display)} secondary=${hasSecondaryActivityFeature(host)}"
 
-        val step1 = runCatching {
-            startOwnActivityOnDisplay(host, display, virtualDisplayId, trampoline)
-            peekTaskId(packageName)
-        }
-        if (step1.isSuccess) {
-            return launched(1, virtualDisplayId, step1.getOrNull(), "trampoline via display context")
-        }
-        errors += "Step 1 (own activity on hidden display): ${step1.exceptionOrNull()?.message}"
+            var starterRunning = false
+            if (fromDisplay != false && displayContext != null) {
+                val placed = startOwn(
+                    displayContext,
+                    trampoline,
+                    optionsForOwnActivity(virtualDisplayId),
+                    "display-context+launchDisplayId",
+                )
+                if (placed != null) {
+                    errors += placed
+                } else {
+                    starterRunning = true
+                    when (val outcome = session.awaitFinished(LAND_MS)) {
+                        is TrampolineSession.Outcome.Ok -> {
+                            return launched(1, outcome.displayId, outcome.taskId, notes, "display-context + launchDisplayId")
+                        }
+                        is TrampolineSession.Outcome.Err -> errors += outcome.message
+                        null -> errors += "Starter did not land on display $virtualDisplayId after display-context launch (display ${session.lastDisplayId})."
+                    }
+                }
+            } else {
+                notes += "Skipped launchDisplayId from the phone activity (isActivityStartAllowedOnDisplay=$fromPhone)."
+            }
 
-        val step2 = runCatching {
-            host.startActivity(trampoline, optionsFor(virtualDisplayId).toBundle())
-            peekTaskId(packageName)
-        }
-        if (step2.isSuccess) {
-            return launched(2, virtualDisplayId, step2.getOrNull(), "trampoline via setLaunchDisplayId")
-        }
-        errors += "Step 2 (own activity setLaunchDisplayId): ${step2.exceptionOrNull()?.message}"
+            if (!starterRunning && !session.alreadyFinished()) {
+                val placed = runCatching { host.startActivity(trampoline) }
+                if (placed.isFailure) {
+                    errors += "Own starter (phone activity, no launchDisplayId): ${placed.exceptionOrNull()?.message}"
+                    return LaunchResult.Failed(1, errors + notes, false)
+                }
+                starterRunning = true
+            }
 
-        errors += "The hidden display exists, but this device will not place GhostDisplay's own starter activity on it, so $packageName was not started. The app was not opened on the phone screen."
-        return LaunchResult.Failed(2, errors, false)
+            if (!session.alreadyFinished() && starterRunning) {
+                val taskId = session.awaitTaskId(TASK_WAIT_MS)
+                if (taskId == null) {
+                    errors += "GhostDisplay starter did not create a task, so it cannot be moved onto the hidden display."
+                    return LaunchResult.Failed(1, errors + notes, false)
+                }
+                val moved = HiddenTaskMover.moveTaskToDisplay(host, taskId, virtualDisplayId)
+                if (moved.isSuccess) {
+                    notes += "Reparented our starter via ${moved.getOrNull()}."
+                } else {
+                    errors += "Could not reparent our starter onto display $virtualDisplayId: ${moved.exceptionOrNull()?.message}"
+                }
+                when (val outcome = session.awaitFinished(MOVE_WAIT_MS)) {
+                    is TrampolineSession.Outcome.Ok -> {
+                        return launched(2, outcome.displayId, outcome.taskId, notes, "reparented our starter, target inherited it")
+                    }
+                    is TrampolineSession.Outcome.Err -> errors += outcome.message
+                    null -> errors += "Own starter stayed on display ${session.lastDisplayId} after reparent (wanted $virtualDisplayId). $packageName was not started."
+                }
+            }
+
+            return LaunchResult.Failed(2, errors + notes, false)
+        } finally {
+            if (TrampolineSession.current === session) {
+                TrampolineSession.current = null
+            }
+            ForegroundLaunchHost.unpin()
+            releaseOccupancy()
+        }
     }
 
-    private fun launched(step: Int, displayId: Int, taskId: Int?, how: String) = LaunchResult.Launched(
+    private fun launched(
+        step: Int,
+        displayId: Int,
+        taskId: Int?,
+        notes: List<String>,
+        how: String,
+    ) = LaunchResult.Launched(
         step = step,
         displayId = displayId,
         taskId = taskId,
-        notes = listOf("startActivity accepted ($how) on display $displayId."),
+        notes = listOf("Hidden starter confirmed ($how) on display $displayId.") + notes,
     )
 
-    private fun displayOf(host: Activity, displayId: Int): Display? {
-        val dm = host.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    private fun startOwn(
+        from: Context,
+        trampoline: Intent,
+        options: ActivityOptions?,
+        how: String,
+    ): String? {
+        val result = runCatching {
+            if (options != null) {
+                from.startActivity(trampoline, options.toBundle())
+            } else {
+                from.startActivity(trampoline)
+            }
+        }
+        return if (result.isFailure) {
+            "Own starter ($how): ${result.exceptionOrNull()?.message}"
+        } else {
+            null
+        }
+    }
+
+    private fun occupy(host: Activity, display: Display) {
+        try {
+            occupancy?.dismiss()
+            val presentation = OccupancyPresentation(host, display)
+            presentation.show()
+            occupancy = presentation
+        } catch (t: Throwable) {
+            Log.i(TAG, "Occupancy presentation not shown: ${t.message}")
+            occupancy = null
+        }
+    }
+
+    private fun releaseOccupancy() {
+        val shown = occupancy
+        occupancy = null
+        if (shown == null) return
+        try {
+            shown.dismiss()
+        } catch (t: Throwable) {
+            Log.i(TAG, "Occupancy presentation dismiss: ${t.message}")
+        }
+    }
+
+    private fun displayOf(from: Context, displayId: Int): Display? {
+        val dm = from.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         return dm.getDisplay(displayId)
     }
 
-    private fun startOwnActivityOnDisplay(
-        host: Activity,
-        display: Display,
-        displayId: Int,
-        intent: Intent,
-    ) {
-        val bundle = optionsFor(displayId).toBundle()
-        var last: Throwable? = null
-        if (Build.VERSION.SDK_INT >= 31) {
-            try {
-                host.createWindowContext(display, WindowManager.LayoutParams.TYPE_APPLICATION, null)
-                    .startActivity(intent, bundle)
-                return
-            } catch (t: Throwable) {
-                last = t
-            }
+    private fun displayFlags(display: Display): String {
+        val flags = display.flags
+        val names = buildList {
+            if (flags and Display.FLAG_PRIVATE != 0) add("PRIVATE")
+            if (flags and Display.FLAG_PRESENTATION != 0) add("PRESENTATION")
+            if (flags and Display.FLAG_SECURE != 0) add("SECURE")
+            add("raw=0x${Integer.toHexString(flags)}")
         }
-        if (Build.VERSION.SDK_INT >= 30) {
-            try {
-                host.createDisplayContext(display).startActivity(intent, bundle)
-                return
-            } catch (t: Throwable) {
-                last = t
-            }
-        }
-        try {
-            host.startActivity(intent, bundle)
-            return
-        } catch (t: Throwable) {
-            last = t
-        }
-        throw last ?: IllegalStateException("Could not start GhostDisplay on display $displayId")
+        return names.joinToString("|")
     }
 
-    private fun optionsFor(displayId: Int): ActivityOptions {
+    private fun hasSecondaryActivityFeature(host: Activity): Boolean {
+        return host.packageManager.hasSystemFeature(
+            PackageManager.FEATURE_ACTIVITIES_ON_SECONDARY_DISPLAYS,
+        )
+    }
+
+    private fun isStartAllowed(from: Context, displayId: Int, intent: Intent): Boolean? {
+        if (Build.VERSION.SDK_INT < 29) return null
+        return try {
+            val am = from.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.isActivityStartAllowedOnDisplay(from, displayId, intent)
+        } catch (t: Throwable) {
+            Log.i(TAG, "isActivityStartAllowedOnDisplay: ${t.message}")
+            null
+        }
+    }
+
+    private fun optionsForOwnActivity(displayId: Int): ActivityOptions {
         val options = ActivityOptions.makeBasic()
         options.launchDisplayId = displayId
-        applyCallerDisplayId(options, displayId)
-        applyFullscreenWindowing(options)
         return options
     }
 
     fun moveTaskToDisplay(taskId: Int, displayId: Int): Result<Unit> {
-        return runCatching {
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val method = am.javaClass.methods.firstOrNull { it.name == "moveTaskToDisplay" && it.parameterTypes.size == 2 }
-                ?: ActivityManager::class.java.methods.firstOrNull { it.name == "moveTaskToDisplay" }
-                ?: throw UnsupportedOperationException(
-                    "moveTaskToDisplay is not available. It is a hidden system API and this device does not expose it to GhostDisplay.",
-                )
-            method.isAccessible = true
-            method.invoke(am, taskId, displayId)
-            Unit
-        }
+        return HiddenTaskMover.moveTaskToDisplay(context, taskId, displayId).map { }
     }
 
     fun peekTaskId(packageName: String): Int? {
@@ -168,32 +285,16 @@ class AppLauncher(
                 if (top?.packageName == packageName) return info.id
             }
         } catch (t: Throwable) {
-            Log.d(TAG, "getAppTasks failed: ${t.message}")
+            Log.d(TAG, "getTaskId failed: ${t.message}")
         }
         return null
-    }
-
-    private fun applyCallerDisplayId(options: ActivityOptions, displayId: Int) {
-        runCatching {
-            val m = ActivityOptions::class.java.methods.firstOrNull {
-                it.name == "setCallerDisplayId" && it.parameterTypes.size == 1
-            } ?: return
-            m.invoke(options, displayId)
-        }
-    }
-
-    private fun applyFullscreenWindowing(options: ActivityOptions) {
-        runCatching {
-            val m = ActivityOptions::class.java.methods.firstOrNull {
-                it.name == "setLaunchWindowingMode" && it.parameterTypes.size == 1
-            } ?: return
-            m.invoke(options, WINDOWING_MODE_FULLSCREEN)
-        }
     }
 
     companion object {
         private const val TAG = "GhostLauncher"
         const val DEFAULT_DISPLAY = Display.DEFAULT_DISPLAY
-        private const val WINDOWING_MODE_FULLSCREEN = 1
+        private const val LAND_MS = 2_500L
+        private const val TASK_WAIT_MS = 2_000L
+        private const val MOVE_WAIT_MS = 5_000L
     }
 }

@@ -33,6 +33,7 @@ import com.ghostdisplay.app.display.VirtualDisplayEngine
 import com.ghostdisplay.app.launch.AppCatalog
 import com.ghostdisplay.app.launch.AppLauncher
 import com.ghostdisplay.app.launch.CompatibilityDetector
+import com.ghostdisplay.app.launch.DisplayTrampolineActivity
 import com.ghostdisplay.app.indicator.OverlayDotService
 import com.ghostdisplay.app.indicator.ReturnNotifications
 import com.ghostdisplay.app.profile.AppCategoryClassifier
@@ -230,8 +231,8 @@ class GhostService : Service() {
 
         val launchResult = launcher.launch(pkg, activity, handle.displayId)
 
-        // Trampoline starts the target after it lands on the VD.
-        delay(1_200)
+        // Handshake already waited for the target start; give a11y a beat to see it.
+        delay(400)
         val onVd = a11y.packageOnDisplay(handle.displayId, pkg)
         val onDefault = a11y.packageOnDefaultDisplay(pkg)
         val probe = a11y.probe(handle.displayId, pkg)
@@ -438,6 +439,7 @@ class GhostService : Service() {
     }
 
     private suspend fun stopSession(sessionId: String) {
+        DisplayTrampolineActivity.finishLiving()
         engine.release(sessionId)
         if (audioBoundSession == sessionId) {
             audio.stop()
@@ -461,6 +463,7 @@ class GhostService : Service() {
         BrowserRuntime.host?.releaseAllViews()
         BrowserRuntime.reset()
         browserDisplaySessionId = null
+        DisplayTrampolineActivity.finishLiving()
         engine.releaseAll()
         audio.stop()
         audioBoundSession = null
@@ -668,6 +671,7 @@ class GhostService : Service() {
     override fun onDestroy() {
         runCatching { BrowserRuntime.host?.releaseAllViews() }
         BrowserRuntime.reset()
+        DisplayTrampolineActivity.finishLiving()
         runCatching { engine.releaseAll() }
         runCatching { audio.stop() }
         releaseWakeLock()

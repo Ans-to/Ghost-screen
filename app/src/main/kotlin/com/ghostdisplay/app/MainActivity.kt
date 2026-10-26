@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        ForegroundLaunchHost.onResume(this)
         vm.refreshApps()
     }
 

@@ -13,8 +13,8 @@ android {
         applicationId = "com.ghostdisplay.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.3.4"
+        versionCode = 14
+        versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -47,6 +47,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        aidl = true
     }
     packaging {
         resources {
@@ -89,9 +90,14 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("androidx.webkit:webkit:1.11.0")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 
     // Optional OCR fallback for apps that expose no accessibility tree.
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.truth:truth:1.4.4")

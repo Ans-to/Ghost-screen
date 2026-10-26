@@ -46,7 +46,7 @@ fun WarningScreen(
                 "GhostDisplay does not sandbox, VPN, or freeze the hidden app. It only keeps it off the physical screen.\n\n" +
                 "Finance apps warn before start (toggle on by default in Setup). A hidden display is not isolation. You can add packages that refuse launch in Setup.\n\n" +
                 "GhostDisplay does not record or exfiltrate captured frames. The optional debug preview is shown only when you open it.\n\n" +
-                "No Shizuku, no root, no ADB, no companion app. The only things you will grant are ordinary runtime permissions, the Accessibility toggle, and — when a session needs it — the standard screen-capture dialog.",
+                "Hidden windows on this OS need Shizuku (no root). You will also grant ordinary runtime permissions, the Accessibility toggle, and — when a session needs it — the standard screen-capture dialog. Setup has the step-by-step Shizuku guide.",
             style = MaterialTheme.typography.bodyLarge,
         )
         Spacer(Modifier.height(32.dp))

@@ -282,11 +282,13 @@ class PerAppProfileTests(unittest.TestCase):
 PUBLIC, PRESENTATION, SECURE = 1 << 0, 1 << 1, 1 << 2
 AUTO_MIRROR, SUPPORTS_TOUCH, OWN_FOCUS = 1 << 4, 1 << 6, 1 << 11
 DESTROY = 1 << 8
+TRUSTED = 1 << 10
 
 
 def flag_attempts(secure=False):
     extra = SECURE if secure else 0
     return [
+        TRUSTED | PUBLIC | PRESENTATION | SUPPORTS_TOUCH | OWN_FOCUS | DESTROY | extra,
         PUBLIC | PRESENTATION | SUPPORTS_TOUCH | OWN_FOCUS | DESTROY | extra,
         PUBLIC | PRESENTATION | SUPPORTS_TOUCH | OWN_FOCUS | extra,
         PUBLIC | PRESENTATION | SUPPORTS_TOUCH | extra,
@@ -567,8 +569,8 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("session.AppViewerActivity", manifest)
         self.assertIn("indicator.OverlayDotService", manifest)
         self.assertIn("GhostService", manifest)
-        self.assertNotIn("rikka.shizuku", manifest.lower())
-        self.assertNotIn("moe.shizuku", manifest.lower())
+        self.assertIn("rikka.shizuku.ShizukuProvider", manifest)
+        self.assertIn("moe.shizuku.privileged.api", manifest)
         self.assertIn("ui.HoldActionActivity", manifest)
         self.assertIn("Theme.GhostDisplay.Hold", manifest)
 
@@ -646,8 +648,11 @@ class SourceContractTests(unittest.TestCase):
 
     def test_version_is_release(self):
         gradle = open(os.path.join(ROOT, "app", "build.gradle.kts"), encoding="utf-8").read()
-        self.assertIn('versionName = "1.3.4"', gradle)
-        self.assertIn("versionCode = 7", gradle)
+        self.assertIn('versionName = "1.4.0"', gradle)
+        self.assertIn("versionCode = 14", gradle)
+        self.assertIn("aidl = true", gradle)
+        self.assertIn("dev.rikka.shizuku:api:13.1.5", gradle)
+        self.assertIn("dev.rikka.shizuku:provider:13.1.5", gradle)
 
     def test_engine_start_hidden_is_package_agnostic(self):
         svc = open(
@@ -673,8 +678,8 @@ class SourceContractTests(unittest.TestCase):
     def test_workflow_runs_unit_tests_and_stages_130(self):
         wf = open(os.path.join(ROOT, ".github", "workflows", "build-apk.yml"), encoding="utf-8").read()
         self.assertIn("testDebugUnitTest", wf)
-        self.assertIn("GhostDisplay-1.3.4-debug.apk", wf)
-        self.assertIn("tag_name: v1.3.4", wf)
+        self.assertIn("GhostDisplay-1.4.0-debug.apk", wf)
+        self.assertIn("tag_name: v1.4.0", wf)
 
     def test_hidden_launch_uses_own_trampoline_without_launch_display_id_on_target(self):
         launcher = open(
@@ -693,7 +698,45 @@ class SourceContractTests(unittest.TestCase):
             encoding="utf-8",
         ).read()
         self.assertIn("DisplayTrampolineActivity", launcher)
-        self.assertIn("startOwnActivityOnDisplay", launcher)
+        self.assertIn("TrampolineSession", launcher)
+        self.assertIn("host.startActivity(trampoline", launcher)
+        self.assertIn("isActivityStartAllowedOnDisplay", launcher)
+        self.assertIn("ActivityOptions.makeBasic()", launcher)
+        self.assertIn("HiddenTaskMover", launcher)
+        self.assertIn("occupancy?.context", launcher)
+        self.assertIn("ShizukuAppStarter", launcher)
+        self.assertIn("ShizukuStatus", launcher)
+        aidl = os.path.join(
+            ROOT, "app", "src", "main", "aidl", "com", "ghostdisplay", "app", "shell", "IGhostShell.aidl",
+        )
+        self.assertTrue(os.path.isfile(aidl), "IGhostShell.aidl")
+        shell = open(
+            os.path.join(
+                ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "shell", "GhostShellService.kt",
+            ),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("am start --user 0 --display", shell)
+        setup = open(
+            os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "ui", "SetupScreen.kt"),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("Shizuku, step by step", setup)
+        self.assertIn("Wireless debugging", setup)
+        self.assertIn("ForegroundLaunchHost.pin", open(
+            os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "ui", "LaunchGate.kt"),
+            encoding="utf-8",
+        ).read())
+        host = open(
+            os.path.join(ROOT, "app", "src", "main", "kotlin", "com", "ghostdisplay", "app", "launch", "ForegroundLaunchHost.kt"),
+            encoding="utf-8",
+        ).read()
+        self.assertIn("fun pin(", host)
+        self.assertIn("if (pinned.get() === activity) return", host)
+        self.assertNotIn("makeTaskLaunchBehind", launcher)
+        self.assertNotIn("startOwnActivityOnDisplay", launcher)
+        self.assertNotIn("createWindowContext", launcher)
+        self.assertNotIn("createDisplayContext", launcher)
         self.assertNotIn("com.android.chrome", launcher)
         trampoline = open(
             os.path.join(
@@ -713,6 +756,20 @@ class SourceContractTests(unittest.TestCase):
         self.assertNotIn("options.launchDisplayId", trampoline)
         self.assertNotIn("ActivityOptions", trampoline)
         self.assertNotIn("finishAndRemoveTask", trampoline)
+        self.assertIn("DisplayManager.DisplayListener", trampoline)
+        self.assertIn("onConfigurationChanged", trampoline)
+        self.assertIn("Display.DEFAULT_DISPLAY", trampoline)
+        self.assertIn("startActivity(sameTask)", trampoline)
+        self.assertIn("startActivity(newTask)", trampoline)
+        self.assertIn("startActivity(fallback)", trampoline)
+        self.assertIn("awaitFinished", launcher)
+        manifest = open(os.path.join(ROOT, "app", "src", "main", "AndroidManifest.xml"), encoding="utf-8").read()
+        trampoline_decl = manifest.split("DisplayTrampolineActivity")[1].split("<activity")[0]
+        self.assertNotIn("android:noHistory", trampoline_decl)
+        self.assertNotIn("singleInstance", trampoline_decl)
+        self.assertIn("android:allowEmbedded=\"true\"", trampoline_decl)
+        self.assertIn("finishLiving", trampoline)
+        self.assertNotIn("FLAG_ACTIVITY_NEW_DOCUMENT", trampoline)
         engine = open(
             os.path.join(
                 ROOT,
@@ -880,7 +937,8 @@ class UserFlowScenarioTests(unittest.TestCase):
         readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
         self.assertIn("RESURRECTED", readme)
         self.assertIn("8dp", readme)
-        self.assertIn("No Shizuku", readme)
+        self.assertIn("Shizuku", readme)
+        self.assertIn("Wireless debugging", readme)
 
 
 if __name__ == "__main__":
