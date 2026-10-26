@@ -149,7 +149,7 @@ class DisplayTrampolineActivity : Activity() {
 
     companion object {
         private const val TAG = "GhostTrampoline"
-        private const val SELF_TIMEOUT_MS = 6_000L
+        private const val SELF_TIMEOUT_MS = 12_000L
         private const val POLL_MS = 100L
         private val live = CopyOnWriteArraySet<DisplayTrampolineActivity>()
 
